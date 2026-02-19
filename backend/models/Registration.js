@@ -37,6 +37,12 @@ const RegistrationSchema = new mongoose.Schema({
     responses: {
         type: Map,
         of: String 
+    },
+
+    // Optional team name for team-based events
+    teamName: {
+        type: String,
+        default: ''
     }
 }, {timestamps : true});
 RegistrationSchema.index({ event: 1, user: 1}, {unique: true});

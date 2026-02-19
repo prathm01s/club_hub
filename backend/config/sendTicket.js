@@ -19,7 +19,7 @@ const sendTicketEmail = async (user, event, ticketId) => {
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: user.email,
-            subject: `Ticker Confirmation: {event.name}`,
+            subject: `Ticket Confirmation: ${event.name}`,
             html: `
                 <h2>Registration Successful!</h2>
                 <p>Hi ${user.firstName},</p>

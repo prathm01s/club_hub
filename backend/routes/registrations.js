@@ -152,8 +152,16 @@ router.post("/:eventID", auth, async (req, res) => {
 // @access  Private
 router.get("/my-events", auth, async (req, res) => {
     try {
-        const registrations = await Registration.find({ user: req.user.id})
-            .populate("event", "name startDate endDate eventType status");
+        const registrations = await Registration.find({ user: req.user.id })
+            .populate({
+                path: "event",
+                select: "name startDate endDate eventType status organizer",
+                populate: {
+                    path: "organizer",
+                    select: "organizerName firstName lastName"
+                }
+            })
+            .sort({ createdAt: -1 });
 
         res.json(registrations);
     } catch (err) {
