@@ -46,7 +46,11 @@ router.post('/', auth, async (req, res) => {
         res.json(event);
     } catch (err) {
         console.error(err.message);
-        res.status(500).send("Server Error");
+        if (err.name === "ValidationError") {
+            const messages = Object.values(err.errors).map(e => e.message).join(", ");
+            return res.status(400).json({ msg: messages });
+        }
+        res.status(500).json({ msg: "Server Error" });
     }
 });
 
@@ -231,7 +235,7 @@ router.get('/', async (req, res) => {
 });
 
 // @route   GET /api/events/my-created-events
-// @desc    Get all events created by the logged-in organizer
+// @desc    Get all events created by the logged-in organizer, filtered by status tab
 // @access  Private (Organizer only)
 router.get("/my-created-events", auth, organizer, async (req, res) => {
     try {
@@ -253,19 +257,97 @@ router.get("/my-created-events", auth, organizer, async (req, res) => {
     }
 });
 
+// @route   GET /api/events/my-closed-event-analytics
+// @desc    Get analytics (revenue, attendance, sales) for all closed events by the organizer
+// @access  Private (Organizer only)
+router.get("/my-closed-event-analytics", auth, organizer, async (req, res) => {
+    try {
+        // 1. Find all closed events belonging to this organizer
+        const closedEvents = await Event.find({
+            organizer: req.user.id,
+            status: "closed"
+        }).select("_id name fee eventType registrationLimit stock");
+
+        if (closedEvents.length === 0) {
+            return res.json([]);
+        }
+
+        const eventIds = closedEvents.map(e => e._id);
+
+        // 2. Aggregate registration stats for all closed events in one DB call
+        const aggregated = await Registration.aggregate([
+            { $match: { event: { $in: eventIds } } },
+            {
+                $group: {
+                    _id: "$event",
+                    totalRegistrations: { $sum: 1 },
+                    ticketsSold: {
+                        $sum: {
+                            $cond: [{ $ne: ["$status", "cancelled"] }, "$quantity", 0]
+                        }
+                    },
+                    totalRevenue: {
+                        // Will be multiplied by fee per event below (fee isn't in Registration)
+                        $sum: {
+                            $cond: [{ $ne: ["$status", "cancelled"] }, "$quantity", 0]
+                        }
+                    },
+                    attendanceCount: {
+                        $sum: {
+                            $cond: [{ $eq: ["$status", "attended"] }, 1, 0]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        // 3. Build a lookup map from aggregation results
+        const statsMap = {};
+        aggregated.forEach(stat => {
+            statsMap[stat._id.toString()] = stat;
+        });
+
+        // 4. Merge event info with its stats, computing revenue using event.fee
+        const result = closedEvents.map(event => {
+            const stat = statsMap[event._id.toString()] || {
+                totalRegistrations: 0,
+                ticketsSold: 0,
+                totalRevenue: 0,
+                attendanceCount: 0
+            };
+            return {
+                _id: event._id,
+                name: event.name,
+                eventType: event.eventType,
+                registrationLimit: event.registrationLimit,
+                stock: event.stock,
+                totalRegistrations: stat.totalRegistrations,
+                ticketsSold: stat.ticketsSold,
+                totalRevenue: stat.ticketsSold * (event.fee || 0),
+                attendanceCount: stat.attendanceCount
+            };
+        });
+
+        res.json(result);
+    } catch (err) {
+        console.error("[GET /my-closed-event-analytics]", err.message);
+        res.status(500).json({ msg: "Server Error" });
+    }
+});
+
 
 router.get('/:id', async (req, res) => {
-    console.log("1. Route hit! ID is:", req.params.id); // <--- DEBUG LOG
+    console.log(`[GET /api/events/:id] Route hit — ID: ${req.params.id}`);
     try {
-        console.log("2. Searching database..."); // <--- DEBUG LOG
+        console.log(`[GET /api/events/:id] Querying DB for event ID: ${req.params.id}`);
         const event = await Event.findById(req.params.id).populate("organizer", "firstName lastName");
-        console.log("3. Database search finished."); // <--- DEBUG LOG
+        console.log(`[GET /api/events/:id] DB query complete.`);
 
         if (!event) {
-            console.log("4. Event not found!"); // <--- DEBUG LOG
+            console.log(`[GET /api/events/:id] No event found for ID: ${req.params.id}`);
             return res.status(404).json({ msg : "Event not found "});
         }
-        console.log("5. Sending response."); // <--- DEBUG LOG
+        console.log(`[GET /api/events/:id] Sending event data for: "${event.name}"`);
         res.json(event);
         
     } catch (err) {

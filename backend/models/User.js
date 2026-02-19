@@ -46,6 +46,10 @@ const UserSchema = new mongoose.Schema({
         type: String
     },
     discordWebhook: { type: String },
+    isActive: {
+        type: Boolean,
+        default: true
+    },
     // <--- NEW: PREFERENCES --->
     interests: {
         type: [String], // e.g., ["Coding", "Music", "Art"]

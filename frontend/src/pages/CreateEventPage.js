@@ -11,7 +11,7 @@ const CreateEventPage = () => {
     const [eventDetails, setEventDetails] = useState({
         name: "", description: "", eventType: "normal", eligibility: "all",
         startDate: "", endDate: "", registrationDeadline: "",
-        registrationLimit: "", fee: 0, stock: "", maxItemsPerUser: 1
+        registrationLimit: "", fee: 0, tags: "", stock: "", maxItemsPerUser: 1
     });
 
     // 2. Dynamic Form Builder State (Array of question objects)
@@ -40,12 +40,25 @@ const CreateEventPage = () => {
     // --- Submission Logic ---
     const submitEvent = async (status) => {
         setError("");
-        
+
+        // Frontend validation
+        if (!eventDetails.name.trim()) return setError("Event name is required.");
+        if (!eventDetails.description.trim()) return setError("Description is required.");
+        if (!eventDetails.startDate) return setError("Start date is required.");
+        if (!eventDetails.endDate) return setError("End date is required.");
+        if (!eventDetails.registrationDeadline) return setError("Registration deadline is required.");
+        if (!eventDetails.registrationLimit || eventDetails.registrationLimit <= 0) return setError("Registration limit must be greater than 0.");
         if (new Date(eventDetails.endDate) <= new Date(eventDetails.startDate)) {
             return setError("End date must be after start date.");
         }
+        if (new Date(eventDetails.registrationDeadline) > new Date(eventDetails.startDate)) {
+            return setError("Registration deadline must be before or equal to the start date.");
+        }
 
-        const payload = { ...eventDetails, formFields, status };
+        const tagsArray = eventDetails.tags
+            ? eventDetails.tags.split(",").map(t => t.trim()).filter(Boolean)
+            : [];
+        const payload = { ...eventDetails, tags: tagsArray, formFields, status };
 
         try {
             const response = await fetch("http://localhost:5000/api/events", {
@@ -62,10 +75,10 @@ const CreateEventPage = () => {
                 alert(`Event successfully saved as ${status}!`);
                 navigate('/organizer-dashboard');
             } else {
-                setError(data.msg || "Error creating event");
+                setError(data.msg || "An error occurred while saving the event.");
             }
         } catch (err) {
-            setError("Server connection failed.");
+            setError("Network error: could not reach the server.");
         }
     };
 
@@ -90,7 +103,32 @@ const CreateEventPage = () => {
                     <input type="number" name="registrationLimit" placeholder="Max Capacity" onChange={handleDetailChange} required />
                 </div>
                 
-                <textarea name="description" placeholder="Event Description..." onChange={handleDetailChange} style={{ width: "100%", marginTop: "15px", height: "80px" }} required />
+                <textarea name="description" placeholder="Event Description..." onChange={handleDetailChange} style={{ width: "100%", marginTop: "15px", height: "80px", padding: "8px", boxSizing: "border-box" }} required />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginTop: "15px" }}>
+                    <div>
+                        <label style={{ display: "block", marginBottom: "4px", fontWeight: "bold" }}>
+                            {eventDetails.eventType === "merchandise" ? "Price per Item (₹)" : "Entry Fee (₹)"}
+                        </label>
+                        <input
+                            type="number" name="fee" min="0"
+                            placeholder="0 for free"
+                            value={eventDetails.fee}
+                            onChange={handleDetailChange}
+                            style={{ width: "100%", padding: "8px", boxSizing: "border-box" }}
+                        />
+                    </div>
+                    <div>
+                        <label style={{ display: "block", marginBottom: "4px", fontWeight: "bold" }}>Tags <span style={{ color: "gray", fontWeight: "normal" }}>(comma-separated)</span></label>
+                        <input
+                            type="text" name="tags"
+                            placeholder="e.g. tech, hackathon, coding"
+                            value={eventDetails.tags}
+                            onChange={handleDetailChange}
+                            style={{ width: "100%", padding: "8px", boxSizing: "border-box" }}
+                        />
+                    </div>
+                </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginTop: "15px" }}>
                     <div>
@@ -223,6 +261,24 @@ const CreateEventPage = () => {
                     disabled={eventDetails?.registrationCount > 0}
                     style={{ padding: "8px 15px", cursor: eventDetails?.registrationCount > 0 ? "not-allowed" : "pointer", background: "#28a745", color: "white", border: "none", borderRadius: "4px" }}>
                     + Add Question
+                </button>
+            </div>
+
+            {/* SECTION 3: Submit Actions */}
+            <div style={{ display: "flex", gap: "15px", justifyContent: "flex-end" }}>
+                <button
+                    type="button"
+                    onClick={() => submitEvent("draft")}
+                    style={{ padding: "12px 25px", background: "#6c757d", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "1rem" }}
+                >
+                    Save as Draft
+                </button>
+                <button
+                    type="button"
+                    onClick={() => submitEvent("published")}
+                    style={{ padding: "12px 25px", background: "#007bff", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "1rem", fontWeight: "bold" }}
+                >
+                    Publish Event
                 </button>
             </div>
         </div>

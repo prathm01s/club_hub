@@ -244,7 +244,7 @@ router.get("/event/:eventId", auth, async (req, res) => {
         if (!event) return res.status(404).json({ msg: "Event not found"});
 
         // Ensure the logged-in user actually owns this event
-        if (event.organizer.toString !== req.user.id) {
+        if (event.organizer.toString() !== req.user.id) {
             return res.status(403).json({ msg: "Not authorized to view these registrations."});
         }
 

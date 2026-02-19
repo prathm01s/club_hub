@@ -11,7 +11,7 @@ import BrowseEventsPage from "./pages/BrowseEventsPage";
 import CreateEventPage from "./pages/CreateEventPage";
 import EventDetailsPage from "./pages/EventDetailsPage";
 import ProfilePage from "./pages/ProfilePage";
-import OrganizersListPage from "./pages/OrganizersListPage";
+import OrganizersListingPage from "./pages/OrganizersListingPage";
 import OrganizerPublicPage from "./pages/OrganizerPublicPage";
 import OrganizerEventDetailPage from "./pages/OrganizerEventDetailPage";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -33,7 +33,7 @@ function App() {
                             <Route path="/dashboard" element={<Dashboard/>}/>
                             <Route path="/browse-events" element={<BrowseEventsPage />} />
                             <Route path="/profile" element={<ProfilePage />} />
-                            <Route path="/organizers" element={<OrganizersListPage />} />
+                            <Route path="/organizers" element={<OrganizersListingPage />} />
                             <Route path="/organizer/:id" element={<OrganizerPublicPage />} />
                         </Route>
 

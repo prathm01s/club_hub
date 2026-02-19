@@ -95,6 +95,19 @@ const AdminDashboard = () => {
         }
     };
 
+    const handleToggleStatus = async (id, currentStatus) => {
+        const action = currentStatus === false ? "activate" : "disable";
+        if (!window.confirm(`Are you sure you want to ${action} this account?`)) return;
+        try {
+            const response = await fetch(`http://localhost:5000/api/admin/organizers/${id}/toggle-status`, {
+                method: "PUT",
+                headers: { "x-auth-token": authTokens.token}
+            });
+            if (response.ok) fetchOrganizers();
+        } catch (err) {
+            alert("Server Error");
+        }
+    };
     if (loading) return <div style={{ padding: "20px" }}>Loading Dashboard...</div>;
 
     return (
@@ -153,6 +166,13 @@ const AdminDashboard = () => {
                                         <td style={tdStyle}>{org.organizerCategory}</td>
                                         <td style={tdStyle}>{org.email}</td>
                                         <td style={tdStyle}>
+                                            {org.isActive === false && <span style={{color: 'red', marginRight: '10px'}}>(Disabled)</span>}
+                                            <button
+                                                onClick={() => handleToggleStatus(org._id, org.isActive)}
+                                                style={{ padding: '5px 10px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '3px', cursor: 'pointer', marginRight: '10px'}}
+                                            >
+                                                {org.isActive === false ? 'Activate' : 'Disable'}
+                                            </button>
                                             <button 
                                                 onClick={() => handleDelete(org._id, org.organizerName)}
                                                 style={{ padding: "5px 10px", background: "#dc3545", color: "white", border: "none", borderRadius: "3px", cursor: "pointer" }}

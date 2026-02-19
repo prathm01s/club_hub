@@ -38,6 +38,24 @@ router.post("/create-organizer", auth, admin, async (req, res) => {
     }
 });
 
+// @route PUT /api/admin/organizers/:id/toggle-status
+// @desc Disable/Enable (archive) an organizer account
+// @access for admin only
+router.put("/organizers/:id/toggle-status", auth, admin, async (req,res) => {
+    try {
+        const organizer = await User.findById(req.params.id);
+        if (!organizer || organizer.role !== 'organizer') {
+            return res.status(404).json({ msg: "Organizer not found."});
+        }
+        organizer.isActive = !organizer.isActive;
+        await organizer.save();
+        res.json({msg : `Organizer ${organizer.isActive ? 'activated' : 'disabled'} successfully.`, organizer})
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send("Server Error");
+    }
+});
+
 // @route   DELETE /api/admin/organizers/:id
 // @desc    Remove an organizer account
 // @access  Private (Admin only)
