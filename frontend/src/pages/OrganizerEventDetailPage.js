@@ -1,6 +1,7 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
+import { Html5QrcodeScanner } from 'html5-qrcode';
 import FeedbackDashboard from "../components/FeedbackDashboard";
 
 const STATUS_COLORS = {
@@ -19,12 +20,76 @@ const OrganizerEventDetailPage = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [statusFilter, setStatusFilter] = useState("all");
 
+    // ─────────────────────────────────────────────────────────
+    // QR Scanner & Attendance Logic
+    // ─────────────────────────────────────────────────────────
+    const [scanResult, setScanResult] = useState(null);
+    const [showScanner, setShowScanner] = useState(false);
+    const scannerRef = useRef(null);
+
+    useEffect(() => {
+        if (showScanner) {
+            scannerRef.current = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true }, false);
+            scannerRef.current.render(onScanSuccess, onScanFailure);
+        } else {
+            if (scannerRef.current) {
+                scannerRef.current.clear().catch(error => console.error("Failed to clear scanner", error));
+                scannerRef.current = null;
+            }
+        }
+        return () => {
+            if (scannerRef.current) scannerRef.current.clear();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [showScanner]);
+
+    const onScanSuccess = async (decodedText) => {
+        let ticketId = decodedText;
+        try {
+            const parsed = JSON.parse(decodedText);
+            if (parsed.ticketId) ticketId = parsed.ticketId;
+        } catch (e) { /* ignore, assume it's a raw string */ }
+
+        if (scannerRef.current) scannerRef.current.pause(true);
+
+        try {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/scan/${ticketId}`, {
+                method: "PUT",
+                headers: { "x-auth-token": authTokens.token }
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                setScanResult({ type: 'success', text: `${data.msg} (${data.participant})` });
+                setRegistrations(prev => prev.map(reg => reg.ticketId === ticketId ? { ...reg, status: 'attended' } : reg));
+                setTimeout(() => {
+                    setScanResult(null);
+                    if (scannerRef.current) scannerRef.current.resume();
+                }, 3000);
+            } else {
+                setScanResult({ type: 'error', text: data.msg || "Invalid Ticket" });
+                setTimeout(() => {
+                    setScanResult(null);
+                    if (scannerRef.current) scannerRef.current.resume();
+                }, 3000);
+            }
+        } catch (err) {
+            setScanResult({ type: 'error', text: "Server error during scan." });
+            setTimeout(() => {
+                setScanResult(null);
+                if (scannerRef.current) scannerRef.current.resume();
+            }, 3000);
+        }
+    };
+
+    const onScanFailure = (error) => { };
+
     useEffect(() => {
         const fetchEventData = async () => {
             try {
                 const [eventRes, regRes] = await Promise.all([
-                    fetch(`http://localhost:5000/api/events/${id}`),
-                    fetch(`http://localhost:5000/api/registrations/event/${id}`, {
+                    fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}`),
+                    fetch(`${process.env.REACT_APP_API_URL}/api/registrations/event/${id}`, {
                         headers: { "x-auth-token": authTokens.token }
                     })
                 ]);
@@ -61,7 +126,7 @@ const OrganizerEventDetailPage = () => {
     // --- Attendance Toggle ---
     const handleToggleAttendance = async (regId) => {
         try {
-            const res = await fetch(`http://localhost:5000/api/registrations/${regId}/attend`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/${regId}/attend`, {
                 method: "PUT",
                 headers: { "x-auth-token": authTokens.token }
             });
@@ -120,7 +185,7 @@ const OrganizerEventDetailPage = () => {
     const handleCloseRegistrations = async () => {
         if (!window.confirm("Close registrations? The event will move to 'Ongoing' and no new registrations will be accepted.")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ status: "ongoing" })
@@ -140,7 +205,7 @@ const OrganizerEventDetailPage = () => {
     const handleCompleteEvent = async () => {
         if (!window.confirm("Mark this event as completed?")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ status: "completed" })
@@ -253,10 +318,28 @@ const OrganizerEventDetailPage = () => {
             <div style={{ background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #eee" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
                     <h2 style={{ margin: 0 }}>Participants ({filteredRegistrations.length})</h2>
-                    <button onClick={exportCSV} style={{ background: "#28a745", color: "white", padding: "8px 16px", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-                        📥 Export CSV
-                    </button>
+                    <div style={{ display: "flex", gap: "10px" }}>
+                        <button onClick={() => setShowScanner(!showScanner)} style={{ padding: "8px 16px", background: "#17a2b8", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                            {showScanner ? "Close Scanner" : "Scan QR Ticket"}
+                        </button>
+                        <button onClick={exportCSV} style={{ background: "#28a745", color: "white", padding: "8px 16px", border: "none", borderRadius: "4px", cursor: "pointer" }}>
+                            📥 Export CSV
+                        </button>
+                    </div>
                 </div>
+
+                {/* Scanner UI */}
+                {showScanner && (
+                    <div style={{ background: "#f8f9fa", padding: "20px", borderRadius: "8px", marginBottom: "20px", border: "2px dashed #17a2b8" }}>
+                        <h4 style={{ margin: "0 0 10px", textAlign: "center" }}>Point camera at Participant's QR Code or Upload File</h4>
+                        {scanResult && (
+                            <div style={{ textAlign: "center", padding: "10px", margin: "10px 0", borderRadius: "4px", background: scanResult.type === 'success' ? '#d4edda' : '#f8d7da', color: scanResult.type === 'success' ? '#155724' : '#721c24', fontWeight: "bold" }}>
+                                {scanResult.text}
+                            </div>
+                        )}
+                        <div id="qr-reader" style={{ width: "100%", maxWidth: "500px", margin: "0 auto" }}></div>
+                    </div>
+                )}
 
                 {/* Filters */}
                 <div style={{ display: "flex", gap: "12px", marginBottom: "16px", flexWrap: "wrap" }}>

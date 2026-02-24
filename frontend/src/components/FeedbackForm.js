@@ -18,7 +18,7 @@ const FeedbackForm = ({ eventId }) => {
     useEffect(() => {
         const fetchMyFeedback = async () => {
             try {
-                const res = await fetch(`http://localhost:5000/api/feedback/${eventId}/my-feedback`, {
+                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/feedback/${eventId}/my-feedback`, {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 if (res.ok) {
@@ -46,7 +46,7 @@ const FeedbackForm = ({ eventId }) => {
         }
         setMsg({ type: "", text: "" });
         try {
-            const res = await fetch(`http://localhost:5000/api/feedback/${eventId}`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/feedback/${eventId}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

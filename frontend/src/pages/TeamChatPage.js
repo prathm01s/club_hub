@@ -83,7 +83,7 @@ const TeamChatPage = () => {
     useEffect(() => {
         const fetchTeam = async () => {
             try {
-                const res = await fetch(`http://localhost:5000/api/teams/${teamId}`, {
+                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${teamId}`, {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 const data = await res.json();
@@ -103,7 +103,7 @@ const TeamChatPage = () => {
     useEffect(() => {
         const fetchMessages = async () => {
             try {
-                const res = await fetch(`http://localhost:5000/api/chat/${teamId}/messages`, {
+                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/${teamId}/messages`, {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 if (res.ok) {
@@ -121,7 +121,7 @@ const TeamChatPage = () => {
 
     // Socket.IO connection
     useEffect(() => {
-        const socket = io("http://localhost:5000", {
+        const socket = io(`${process.env.REACT_APP_API_URL}`, {
             auth: { token: authTokens.token }
         });
         socketRef.current = socket;
@@ -201,7 +201,7 @@ const TeamChatPage = () => {
         try {
             const formData = new FormData();
             formData.append("file", file);
-            const res = await fetch(`http://localhost:5000/api/chat/${teamId}/upload`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/chat/${teamId}/upload`, {
                 method: "POST",
                 headers: { "x-auth-token": authTokens.token },
                 body: formData
@@ -363,7 +363,7 @@ const TeamChatPage = () => {
                                         {msg.fileUrl && (
                                             <div style={{ marginTop: msg.message ? "6px" : 0 }}>
                                                 <a
-                                                    href={`http://localhost:5000${msg.fileUrl}`}
+                                                    href={`${process.env.REACT_APP_API_URL}${msg.fileUrl}`}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     style={{

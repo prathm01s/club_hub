@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useContext, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
-import { Html5QrcodeScanner } from 'html5-qrcode';
 import FeedbackForm from "../components/FeedbackForm";
 const EventDetailsPage = () => {
     const { id } = useParams();
@@ -12,133 +11,8 @@ const EventDetailsPage = () => {
     const [event, setEvent] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [registrations, setRegistrations] = useState([]);
 
-    const orgId = event?.organizer?._id || event?.organizer;
-    const userId = user?.id || user?._id;
-    const isOrganizer = !!(user && event && orgId && userId && String(orgId) === String(userId));
 
-    useEffect(() => {
-        const fetchRegistrations = async () => {
-            if (event && isOrganizer) {
-                try {
-                    const res = await fetch(`http://localhost:5000/api/registrations/event/${id}`, {
-                        headers: { "x-auth-token": authTokens?.token }
-                    });
-                    const d = await res.json();
-                    if (res.ok) setRegistrations(d);
-                } catch (err) { console.error("Error fetching registrations", err); }
-            }
-        };
-        fetchRegistrations();
-    }, [event, isOrganizer, authTokens, id]);
-
-    // ─────────────────────────────────────────────────────────
-    // Organizer QR Scanner & Attendance Logic
-    // ─────────────────────────────────────────────────────────
-    const [scanResult, setScanResult] = useState(null);
-    const [showScanner, setShowScanner] = useState(false);
-    const scannerRef = useRef(null);
-
-    useEffect(() => {
-        if (showScanner) {
-            scannerRef.current = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true }, false);
-            scannerRef.current.render(onScanSuccess, onScanFailure);
-        } else {
-            if (scannerRef.current) {
-                scannerRef.current.clear().catch(error => console.error("Failed to clear scanner", error));
-                scannerRef.current = null;
-            }
-        }
-        return () => {
-            if (scannerRef.current) scannerRef.current.clear();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [showScanner]);
-
-    const onScanSuccess = async (decodedText) => {
-        let ticketId = decodedText;
-        try {
-            const parsed = JSON.parse(decodedText);
-            if (parsed.ticketId) ticketId = parsed.ticketId;
-        } catch (e) { /* ignore, assume it's a raw string */ }
-
-        if (scannerRef.current) scannerRef.current.pause(true);
-
-        try {
-            const res = await fetch(`http://localhost:5000/api/registrations/scan/${ticketId}`, {
-                method: "PUT",
-                headers: { "x-auth-token": authTokens.token }
-            });
-            const data = await res.json();
-
-            if (res.ok) {
-                setScanResult({ type: 'success', text: `${data.msg} (${data.participant})` });
-                setRegistrations(prev => prev.map(reg => reg.ticketId === ticketId ? { ...reg, status: 'attended' } : reg));
-                setTimeout(() => {
-                    setScanResult(null);
-                    if (scannerRef.current) scannerRef.current.resume();
-                }, 3000);
-            } else {
-                setScanResult({ type: 'error', text: data.msg || "Invalid Ticket" });
-                setTimeout(() => {
-                    setScanResult(null);
-                    if (scannerRef.current) scannerRef.current.resume();
-                }, 3000);
-            }
-        } catch (err) {
-            setScanResult({ type: 'error', text: "Server error during scan." });
-            setTimeout(() => {
-                setScanResult(null);
-                if (scannerRef.current) scannerRef.current.resume();
-            }, 3000);
-        }
-    };
-
-    const onScanFailure = (error) => { };
-
-    const handleManualOverride = async (regId, name, currentStatus) => {
-        const action = currentStatus === 'attended' ? 'registered' : 'attended';
-        const reason = window.prompt(`Manual Override: Reason for marking ${name} as ${action.toUpperCase()}?`);
-        if (!reason) return;
-
-        try {
-            const res = await fetch(`http://localhost:5000/api/registrations/${regId}/override`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
-                body: JSON.stringify({ reason, action })
-            });
-            const data = await res.json();
-            if (res.ok) {
-                alert(data.msg);
-                setRegistrations(prev => prev.map(reg => reg._id === regId ? { ...reg, status: action } : reg));
-            } else {
-                alert(data.msg || "Override failed.");
-            }
-        } catch (err) {
-            alert("Server Error during override.");
-        }
-    };
-
-    const handleExportCSV = async () => {
-        try {
-            const res = await fetch(`http://localhost:5000/api/registrations/event/${id}/export`, {
-                headers: { "x-auth-token": authTokens.token }
-            });
-            if (!res.ok) throw new Error("Failed to export.");
-
-            const blob = await res.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `attendance_${event.name.replace(/\s+/g, '_')}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-        } catch (err) {
-            alert("Error exporting CSV");
-        }
-    };
     // Registration State
     const [showForm, setShowForm] = useState(false);
     const [formResponses, setFormResponses] = useState({});
@@ -159,7 +33,7 @@ const EventDetailsPage = () => {
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const response = await fetch(`http://localhost:5000/api/events/${id}`);
+                const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}`);
                 const data = await response.json();
 
                 if (response.ok) {
@@ -178,7 +52,7 @@ const EventDetailsPage = () => {
                     // If team event: check if this participant already has a team
                     if (data.isTeamEvent && authTokens) {
                         try {
-                            const teamRes = await fetch(`http://localhost:5000/api/teams/event/${id}/my-team`, {
+                            const teamRes = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/event/${id}/my-team`, {
                                 headers: { "x-auth-token": authTokens.token }
                             });
                             const teamData = await teamRes.json();
@@ -215,7 +89,7 @@ const EventDetailsPage = () => {
         setSuccessMsg("");
 
         try {
-            const response = await fetch(`http://localhost:5000/api/registrations/${id}`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/${id}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -245,7 +119,7 @@ const EventDetailsPage = () => {
     const handleCreateTeam = async () => {
         setRegError("");
         try {
-            const response = await fetch("http://localhost:5000/api/teams/create", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/create", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({
@@ -274,7 +148,7 @@ const EventDetailsPage = () => {
             setRegError("Please enter an invite code.");
             return;
         }
-        const res = await fetch(`http://localhost:5000/api/teams/preview/${normalizedCode}`, {
+        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/preview/${normalizedCode}`, {
             headers: { "x-auth-token": authTokens.token }
         });
         const data = await res.json();
@@ -321,7 +195,7 @@ const EventDetailsPage = () => {
     const handleJoinTeam = async () => {
         setRegError("");
         try {
-            const response = await fetch("http://localhost:5000/api/teams/join", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/join", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase(), responses: teamFormResponses })
@@ -452,7 +326,7 @@ const EventDetailsPage = () => {
                                     userId={user._id || user.id}
                                     onDisband={async () => {
                                         if (!window.confirm("Disband this team? All members will lose their spot.")) return;
-                                        const res = await fetch(`http://localhost:5000/api/teams/${myTeam._id}`, {
+                                        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${myTeam._id}`, {
                                             method: "DELETE", headers: { "x-auth-token": authTokens.token }
                                         });
                                         if (res.ok) { setMyTeam(null); setSuccessMsg("Team disbanded."); }
@@ -460,7 +334,7 @@ const EventDetailsPage = () => {
                                     }}
                                     onLeave={async () => {
                                         if (!window.confirm("Leave this team?")) return;
-                                        const res = await fetch(`http://localhost:5000/api/teams/${myTeam._id}/leave`, {
+                                        const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${myTeam._id}/leave`, {
                                             method: "DELETE", headers: { "x-auth-token": authTokens.token }
                                         });
                                         if (res.ok) { setMyTeam(null); setSuccessMsg("You left the team."); }
@@ -503,7 +377,7 @@ const EventDetailsPage = () => {
                                             userId={user._id || user.id}
                                             onDisband={async () => {
                                                 if (!window.confirm("Disband this team? All members will lose their spot.")) return;
-                                                const res = await fetch(`http://localhost:5000/api/teams/${myTeam._id}`, {
+                                                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${myTeam._id}`, {
                                                     method: "DELETE", headers: { "x-auth-token": authTokens.token }
                                                 });
                                                 if (res.ok) { setMyTeam(null); setSuccessMsg("Team disbanded."); }
@@ -511,7 +385,7 @@ const EventDetailsPage = () => {
                                             }}
                                             onLeave={async () => {
                                                 if (!window.confirm("Leave this team?")) return;
-                                                const res = await fetch(`http://localhost:5000/api/teams/${myTeam._id}/leave`, {
+                                                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${myTeam._id}/leave`, {
                                                     method: "DELETE", headers: { "x-auth-token": authTokens.token }
                                                 });
                                                 if (res.ok) { setMyTeam(null); setSuccessMsg("You left the team."); }
@@ -727,104 +601,6 @@ const EventDetailsPage = () => {
                     <FeedbackForm eventId={id} />
                 )}
 
-                {/* ── Organizer View (outside the registration section) ── */}
-                {isOrganizer && (
-                    <div style={{ marginTop: "40px", borderTop: "2px solid #ccc", paddingTop: "20px" }}>
-                        <h2>Organizer Dashboard</h2>
-
-                        {/* Live Stats Board */}
-                        <div style={{ display: "flex", gap: "20px", marginBottom: "20px", flexWrap: "wrap" }}>
-                            <div style={{ background: "#e9ecef", padding: "15px 20px", borderRadius: "8px", flex: 1, minWidth: "150px", textAlign: "center" }}>
-                                <h4 style={{ margin: "0 0 5px", color: "#495057" }}>Total Registered</h4>
-                                <span style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#007bff" }}>{registrations.length}</span>
-                            </div>
-                            <div style={{ background: "#d4edda", padding: "15px 20px", borderRadius: "8px", flex: 1, minWidth: "150px", textAlign: "center" }}>
-                                <h4 style={{ margin: "0 0 5px", color: "#155724" }}>Checked In</h4>
-                                <span style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#28a745" }}>{registrations.filter(r => r.status === 'attended').length}</span>
-                            </div>
-                            <div style={{ background: "#fff3cd", padding: "15px 20px", borderRadius: "8px", flex: 1, minWidth: "150px", textAlign: "center" }}>
-                                <h4 style={{ margin: "0 0 5px", color: "#856404" }}>Yet to Arrive</h4>
-                                <span style={{ fontSize: "1.8rem", fontWeight: "bold", color: "#ffc107" }}>{registrations.filter(r => r.status === 'registered').length}</span>
-                            </div>
-                        </div>
-
-                        {/* Actions Header */}
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "10px" }}>
-                            <h3>Registered Participants ({registrations.length})</h3>
-                            <div style={{ display: "flex", gap: "10px" }}>
-                                <button onClick={() => setShowScanner(!showScanner)} style={{ padding: "8px 16px", background: "#17a2b8", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
-                                    {showScanner ? "Close Scanner" : "Scan QR Ticket"}
-                                </button>
-                                <button onClick={handleExportCSV} style={{ padding: "8px 16px", background: "#6c757d", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
-                                    Export CSV
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Scanner UI */}
-                        {showScanner && (
-                            <div style={{ background: "#f8f9fa", padding: "20px", borderRadius: "8px", marginBottom: "20px", border: "2px dashed #17a2b8" }}>
-                                <h4 style={{ margin: "0 0 10px", textAlign: "center" }}>Point camera at Participant's QR Code or Upload File</h4>
-                                {scanResult && (
-                                    <div style={{ textAlign: "center", padding: "10px", margin: "10px 0", borderRadius: "4px", background: scanResult.type === 'success' ? '#d4edda' : '#f8d7da', color: scanResult.type === 'success' ? '#155724' : '#721c24', fontWeight: "bold" }}>
-                                        {scanResult.text}
-                                    </div>
-                                )}
-                                <div id="qr-reader" style={{ width: "100%", maxWidth: "500px", margin: "0 auto" }}></div>
-                            </div>
-                        )}
-
-                        {registrations.length === 0 ? (
-                            <p>No one has registered yet.</p>
-                        ) : (
-                            <div style={{ overflowX: "auto" }}>
-                                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
-                                    <thead>
-                                        <tr style={{ background: "#f1f1f1", textAlign: "left" }}>
-                                            <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Name</th>
-                                            <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Email</th>
-                                            <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Contact</th>
-                                            <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Ticket ID</th>
-                                            {event.isTeamEvent && <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Team</th>}
-                                            <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Status</th>
-                                            <th style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {registrations.map(r => (
-                                            <tr key={r._id} style={{ opacity: r.status === 'cancelled' ? 0.5 : 1 }}>
-                                                <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>{r.user.firstName} {r.user.lastName}</td>
-                                                <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>{r.user.email}</td>
-                                                <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>{r.user.contactNumber || "N/A"}</td>
-                                                <td style={{ padding: "10px", borderBottom: "1px solid #ddd", fontFamily: "monospace", fontSize: "0.85rem" }}>{r.ticketId}</td>
-                                                {event.isTeamEvent && <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>{r.teamName || "-"}</td>}
-                                                <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>
-                                                    <span style={{
-                                                        padding: "4px 8px", borderRadius: "12px", fontSize: "0.8rem", fontWeight: "bold",
-                                                        background: r.status === 'attended' ? '#d4edda' : r.status === 'cancelled' ? '#f8d7da' : '#cce5ff',
-                                                        color: r.status === 'attended' ? '#155724' : r.status === 'cancelled' ? '#721c24' : '#004085'
-                                                    }}>
-                                                        {r.status.toUpperCase()}
-                                                    </span>
-                                                </td>
-                                                <td style={{ padding: "10px", borderBottom: "1px solid #ddd" }}>
-                                                    {r.status !== 'cancelled' && (
-                                                        <button
-                                                            onClick={() => handleManualOverride(r._id, `${r.user.firstName} ${r.user.lastName}`, r.status)}
-                                                            style={{ padding: "6px 12px", background: r.status === 'attended' ? "#dc3545" : "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "0.8rem" }}
-                                                        >
-                                                            Override to {r.status === 'attended' ? 'Reg' : 'Attend'}
-                                                        </button>
-                                                    )}
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-                )}
             </div>
         </div>
     );
@@ -894,7 +670,7 @@ const ExistingTeamPanel = ({ team, userId, onDisband, onLeave, authTokens, onInv
     const handleInviteAction = async () => {
         if (!inviteEmail.trim()) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/teams/${team._id}/invite`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${team._id}/invite`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ email: inviteEmail.trim() })

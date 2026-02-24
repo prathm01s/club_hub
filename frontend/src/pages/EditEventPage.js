@@ -14,7 +14,7 @@ const EditEventPage = () => {
     useEffect(() => {
         const fetchEvent = async () => {
             try {
-                const response = await fetch(`http://localhost:5000/api/events/${id}`);
+                const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}`);
                 const data = await response.json();
 
                 if (response.ok) {
@@ -93,7 +93,7 @@ const EditEventPage = () => {
         }
 
         try {
-            const response = await fetch(`http://localhost:5000/api/events/${id}`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -119,7 +119,7 @@ const EditEventPage = () => {
         if (!window.confirm("Are you sure you want to publish this event?")) return;
 
         try {
-            const response = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ status: "published" })
@@ -136,7 +136,7 @@ const EditEventPage = () => {
     const handleCloseRegistrations = async () => {
         if (!window.confirm("Close registrations? The event will move to 'Ongoing' status and no new registrations will be accepted.")) return;
         try {
-            const response = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ status: "ongoing" })
@@ -157,7 +157,7 @@ const EditEventPage = () => {
         if (!window.confirm("Are you sure you want to mark this event as completed?")) return;
 
         try {
-            const response = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ status: "completed" })

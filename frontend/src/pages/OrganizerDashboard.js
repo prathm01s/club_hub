@@ -23,7 +23,7 @@ const OrganizerDashboard = () => {
     const fetchMyEvents = useCallback(async () => {
         try {
             // Fetch events filtered by the currently active tab status
-            const response = await fetch(`http://localhost:5000/api/events/my-created-events?status=${activeTab}`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events/my-created-events?status=${activeTab}`, {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -43,7 +43,7 @@ const OrganizerDashboard = () => {
     const fetchCompletedEventAnalytics = useCallback(async () => {
         try {
             const response = await fetch(
-                "http://localhost:5000/api/events/my-completed-event-analytics",
+                `${process.env.REACT_APP_API_URL}/api/events/my-completed-event-analytics",
                 {
                     method: "GET",
                     headers: {

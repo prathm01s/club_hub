@@ -43,7 +43,7 @@ const BrowseEventsPage = () => {
             setLoading(true);
             setError("");
             try {
-                const url = new URL("http://localhost:5000/api/events");
+                const url = new URL(`${process.env.REACT_APP_API_URL}/api/events");
                 url.searchParams.set("status", "all");
                 if (filters.search)      url.searchParams.set("search", filters.search);
                 if (filters.type)        url.searchParams.set("type", filters.type);

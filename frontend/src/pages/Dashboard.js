@@ -31,7 +31,7 @@ const Dashboard = () => {
 
     const fetchMyEvents = useCallback(async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/registrations/my-events", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/my-events", {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -50,7 +50,7 @@ const Dashboard = () => {
     const fetchTicket = async (ticketId) => {
         setTicketLoading(true);
         try {
-            const res = await fetch(`http://localhost:5000/api/registrations/ticket/${ticketId}`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/ticket/${ticketId}`, {
                 headers: { "x-auth-token": authTokens.token }
             });
             if (res.ok) {
@@ -69,7 +69,7 @@ const Dashboard = () => {
 
     const fetchMyTeams = useCallback(async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/teams/my-teams", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/my-teams", {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await response.json();
@@ -81,7 +81,7 @@ const Dashboard = () => {
 
     const fetchMyInvites = useCallback(async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/teams/my-invites", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/my-invites", {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await response.json();
@@ -101,7 +101,7 @@ const Dashboard = () => {
         if (!window.confirm("Are you sure you want to cancel your registration? This cannot be undone.")) return;
 
         try {
-            const response = await fetch(`http://localhost:5000/api/registrations/${registrationId}/cancel`, {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/${registrationId}/cancel`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -124,7 +124,7 @@ const Dashboard = () => {
     const handleLeaveTeam = async (teamId) => {
         if (!window.confirm("Leave this team?")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/teams/${teamId}/leave`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${teamId}/leave`, {
                 method: "DELETE", headers: { "x-auth-token": authTokens.token }
             });
             const data = await res.json();
@@ -136,7 +136,7 @@ const Dashboard = () => {
     const handleDisbandTeam = async (teamId) => {
         if (!window.confirm("Disband this team? All members will lose their spot.")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/teams/${teamId}`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${teamId}`, {
                 method: "DELETE", headers: { "x-auth-token": authTokens.token }
             });
             const data = await res.json();
@@ -152,7 +152,7 @@ const Dashboard = () => {
         const email = inviteEmails[teamId]?.trim();
         if (!email) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/teams/${teamId}/invite`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/${teamId}/invite`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ email })

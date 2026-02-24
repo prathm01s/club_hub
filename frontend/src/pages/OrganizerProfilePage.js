@@ -15,7 +15,7 @@ const OrganizerProfilePage = () => {
     useEffect(() => {
         const fetchProfile = async () => {
             try {
-                const response = await fetch("http://localhost:5000/api/users/profile", {
+                const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 const data = await response.json();
@@ -46,7 +46,7 @@ const OrganizerProfilePage = () => {
         setMsg({ type: "", text: "" });
 
         try {
-            const response = await fetch("http://localhost:5000/api/users/organizer-profile", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/organizer-profile", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify(profileData)
@@ -69,7 +69,7 @@ const OrganizerProfilePage = () => {
         setResetLoading(true);
         setResetMsg({ type: "", text: "" });
         try {
-            const res = await fetch("http://localhost:5000/api/users/request-password-reset", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/request-password-reset", {
                 method: "POST",
                 headers: { "x-auth-token": authTokens.token }
             });

@@ -10,7 +10,7 @@ const AdminPasswordResetPage = () => {
 
     const fetchRequests = async () => {
         try {
-            const res = await fetch("http://localhost:5000/api/admin/password-reset-requests", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/password-reset-requests", {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await res.json();
@@ -30,7 +30,7 @@ const AdminPasswordResetPage = () => {
     const handleApprove = async (id) => {
         if (!window.confirm("Approve this request? A new password will be generated.")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/password-reset-requests/${id}/approve`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/password-reset-requests/${id}/approve`, {
                 method: "PUT",
                 headers: { "x-auth-token": authTokens.token }
             });
@@ -50,7 +50,7 @@ const AdminPasswordResetPage = () => {
     const handleReject = async (id) => {
         if (!window.confirm("Reject this password reset request?")) return;
         try {
-            const res = await fetch(`http://localhost:5000/api/admin/password-reset-requests/${id}/reject`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/password-reset-requests/${id}/reject`, {
                 method: "PUT",
                 headers: { "x-auth-token": authTokens.token }
             });

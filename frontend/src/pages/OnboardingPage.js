@@ -26,7 +26,7 @@ const OnboardingPage = () => {
     useEffect(() => {
         const fetchOrganizers = async () => {
             try {
-                const res = await fetch("http://localhost:5000/api/users/organizers", {
+                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/organizers", {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 if (res.ok) {
@@ -60,7 +60,7 @@ const OnboardingPage = () => {
         setSaving(true);
         setError("");
         try {
-            const res = await fetch("http://localhost:5000/api/users/preferences", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/preferences", {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -89,7 +89,7 @@ const OnboardingPage = () => {
         setSaving(true);
         setError("");
         try {
-            const res = await fetch("http://localhost:5000/api/users/preferences", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/preferences", {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",

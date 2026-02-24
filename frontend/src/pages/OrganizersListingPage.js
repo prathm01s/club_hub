@@ -14,13 +14,13 @@ const OrganizersListPage = () => {
     const fetchData = useCallback(async () => {
         setLoading(true);
         try {
-            const orgRes = await fetch("http://localhost:5000/api/users/organizers");
+            const orgRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/organizers");
             const orgData = await orgRes.json();
             setOrganizers(orgData);
 
             // Only fetch profile (following list) when authenticated as participant
             if (authTokens && user?.role === "participant") {
-                const profileRes = await fetch("http://localhost:5000/api/users/profile", {
+                const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 const profileData = await profileRes.json();
@@ -46,7 +46,7 @@ const OrganizersListPage = () => {
             : [...followingIds, orgId];
 
         try {
-            const res = await fetch("http://localhost:5000/api/users/profile", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",

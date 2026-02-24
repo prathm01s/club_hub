@@ -17,7 +17,7 @@ const FeedbackDashboard = ({ eventId }) => {
     useEffect(() => {
         const fetchStats = async () => {
             try {
-                const res = await fetch(`http://localhost:5000/api/feedback/${eventId}/stats`, {
+                const res = await fetch(`${process.env.REACT_APP_API_URL}/api/feedback/${eventId}/stats`, {
                     headers: { "x-auth-token": authTokens.token }
                 });
                 if (res.ok) {
@@ -36,7 +36,7 @@ const FeedbackDashboard = ({ eventId }) => {
         const fetchFeedbacks = async () => {
             setLoading(true);
             try {
-                const url = new URL(`http://localhost:5000/api/feedback/${eventId}`);
+                const url = new URL(`${process.env.REACT_APP_API_URL}/api/feedback/${eventId}`);
                 if (filterRating) {
                     url.searchParams.set("minRating", filterRating);
                     url.searchParams.set("maxRating", filterRating);
@@ -62,7 +62,7 @@ const FeedbackDashboard = ({ eventId }) => {
 
     const handleExport = async () => {
         try {
-            const res = await fetch(`http://localhost:5000/api/feedback/${eventId}/export`, {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/feedback/${eventId}/export`, {
                 headers: { "x-auth-token": authTokens.token }
             });
             if (res.ok) {

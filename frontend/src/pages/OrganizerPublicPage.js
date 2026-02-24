@@ -13,17 +13,17 @@ const OrganizerPublicPage = () => {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                const orgs = await fetch(`http://localhost:5000/api/users/organizers/${id}`);
+                const orgs = await fetch(`${process.env.REACT_APP_API_URL}/api/users/organizers/${id}`);
                 const orgData = await orgs.json();
                 setOrganizer(orgData);
 
-                const evRes = await fetch(`http://localhost:5000/api/events?organizerId=${id}`);
+                const evRes = await fetch(`${process.env.REACT_APP_API_URL}/api/events?organizerId=${id}`);
                 const eventData = await evRes.json();
                 setEvents(eventData);
 
                 // Check if current participant follows this organizer
                 if (authTokens && user?.role === "participant") {
-                    const profileRes = await fetch("http://localhost:5000/api/users/profile", {
+                    const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
                         headers: { "x-auth-token": authTokens.token }
                     });
                     const profileData = await profileRes.json();
@@ -42,7 +42,7 @@ const OrganizerPublicPage = () => {
         setFollowLoading(true);
         try {
             // Get current following list
-            const profileRes = await fetch("http://localhost:5000/api/users/profile", {
+            const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
                 headers: { "x-auth-token": authTokens.token }
             });
             const profileData = await profileRes.json();
@@ -52,7 +52,7 @@ const OrganizerPublicPage = () => {
                 ? followingIds.filter(fid => fid !== id)
                 : [...followingIds, id];
 
-            const res = await fetch("http://localhost:5000/api/users/profile", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ following: newFollowing })

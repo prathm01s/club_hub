@@ -22,8 +22,13 @@ router.post('/register', async (req, res) => {
             return res.status(400).json({ msg: 'User already exists' });
         }
 
+        // Prevent admin email from being registered via frontend
+        if (email === process.env.ADMIN_EMAIL) {
+            return res.status(403).json({ msg: 'Registration with this email is not allowed' });
+        }
+
         // 2. INFER isIIIT purely based on the email string
-        const iiitDomains = ['students.iiit.ac.in', 'research.iiit.ac.in', 'iiit.ac.in'];
+        const iiitDomains = ['students.iiit.ac.in', 'research.iiit.ac.in', 'iiit.ac.in', 'faculty.iiit.ac.in'];
         const emailDomain = email.split('@')[1];
 
         // If the domain is in our list, it's an IIIT student. Otherwise, false.
