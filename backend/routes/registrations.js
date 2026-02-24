@@ -279,7 +279,12 @@ router.put('/:id/cancel', auth, async (req, res) => {
             return res.status(403).json({ msg: "Not authorized to cancel this registration" });
         }
 
-        // 3. Check if it is already cancelled
+        // 3. Block cancellation if attendance was already marked
+        if (registration.status === 'attended') {
+            return res.status(400).json({ msg: "Cannot cancel — your attendance has already been marked." });
+        }
+
+        // 4. Check if it is already cancelled
         if (registration.status === 'cancelled') {
             return res.status(400).json({ msg: "Registration is already cancelled" });
         }
