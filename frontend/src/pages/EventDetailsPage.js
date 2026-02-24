@@ -618,8 +618,8 @@ const EventDetailsPage = () => {
                     )}
                 </div>
 
-                {/* Feedback Section — visible for completed/ongoing events for logged-in participants */}
-                {user && user.role === 'participant' && event && (event.status === 'completed' || event.status === 'ongoing') && (
+                {/* Feedback Section — visible for logged-in participants who are registered */}
+                {user && user.role === 'participant' && event && (myRegistration || (myTeam && myTeam.status === 'completed')) && (
                     <FeedbackForm eventId={id} />
                 )}
 
