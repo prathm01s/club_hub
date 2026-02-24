@@ -1,10 +1,43 @@
 const express = require("express");
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const auth = require("../middleware/auth");
 const organizer = require("../middleware/organizer");
 const Event = require("../models/Event");
 const User = require("../models/User");
 const Registration = require("../models/Registration");
+
+// ─── AUTO-STATUS SYNC ────────────────────────────────────────────────────────
+// Runs a batch update to transition event statuses based on current time.
+// upcoming  → ongoing   when now >= startDate
+// ongoing   → completed when now >  endDate
+// Also migrates legacy 'published' records to the correct derived status.
+async function syncEventStatuses() {
+    const now = new Date();
+    try {
+        // Migrate legacy 'published' & null/undefined status docs to correct derived status
+        const legacyFilter = { $or: [{ status: 'published' }, { status: null }] };
+        const legacy = await Event.find(legacyFilter).select('startDate endDate status');
+        for (const e of legacy) {
+            if (new Date(e.endDate) < now)        e.status = 'completed';
+            else if (new Date(e.startDate) <= now) e.status = 'ongoing';
+            else                                   e.status = 'upcoming';
+            await e.save({ validateBeforeSave: false });
+        }
+        // upcoming → ongoing
+        await Event.updateMany(
+            { status: 'upcoming', startDate: { $lte: now } },
+            { $set: { status: 'ongoing' } }
+        );
+        // ongoing → completed
+        await Event.updateMany(
+            { status: 'ongoing', endDate: { $lt: now } },
+            { $set: { status: 'completed' } }
+        );
+    } catch (err) {
+        console.error('[syncEventStatuses] error:', err.message);
+    }
+}
 // @route   POST /api/events
 // @desc    Create an event (saved as draft by default)
 // @access  Organizers Only
@@ -61,8 +94,8 @@ router.put('/:id/status', auth, async (req, res) => {
     try {
         const { status } = req.body;
 
-        // 1. validate the status value sent to server by req body
-        const validStatuses = ['draft', 'published', 'ongoing', 'closed'];
+        // 1. validate the status value
+        const validStatuses = ['draft', 'upcoming', 'published', 'ongoing', 'completed'];
         if (!validStatuses.includes(status)) {
             return res.status(400).json({ msg: "Invalid status value" });
         }
@@ -73,16 +106,62 @@ router.put('/:id/status', auth, async (req, res) => {
             return res.status(404).json({ msg: "Event not found" });
         }
 
-        // 3. Security: Make sure the logged-in user actually owns this event
+        // 3. Security: check ownership
         if (event.organizer.toString() !== req.user.id) {
             return res.status(403).json({ msg: "Not authorized to edit this event" });
         }
 
-        // 4. Update and save
-        event.status = status;
+        // 4. When publishing a draft, derive the correct target status from dates.
+        //    Organizers always click "Publish" — the system decides upcoming vs ongoing.
+        let targetStatus = status;
+        if (event.status === 'draft' && status === 'published') {
+            const now = new Date();
+            if (new Date(event.startDate) > now) {
+                targetStatus = 'upcoming';
+            } else if (new Date(event.endDate) > now) {
+                targetStatus = 'ongoing';
+            } else {
+                targetStatus = 'completed';
+            }
+        }
+
+        // 5. Validate allowed transitions
+        const allowed = {
+            draft:     ['upcoming', 'published', 'ongoing', 'completed'], // resolved above
+            upcoming:  ['ongoing', 'completed'],
+            published: ['upcoming', 'ongoing', 'completed'],              // legacy
+            ongoing:   ['completed'],
+            completed: []
+        };
+        if (!(allowed[event.status] || []).includes(targetStatus)) {
+            return res.status(400).json({
+                msg: `Cannot transition from '${event.status}' to '${targetStatus}'.`
+            });
+        }
+
+        // 6. Update and save
+        event.status = targetStatus;
         await event.save();
 
-        res.json({ msg: `Event status updated to ${status}`, event });
+        // 7. Fire Discord webhook when an event first becomes upcoming/ongoing
+        if (targetStatus === 'upcoming' || targetStatus === 'ongoing') {
+            try {
+                const organizerUser = await User.findById(req.user.id);
+                if (organizerUser?.discordWebhook) {
+                    const axios = require('axios');
+                    const message = {
+                        content: `**New Event Published by ${organizerUser.organizerName}!**\n\n**${event.name}**\n*${event.description}*\n\n**Starts:** ${new Date(event.startDate).toLocaleString()}\n**Type:** ${event.eventType}\n\nRegister now on Felicity Event Manager!`
+                    };
+                    axios.post(organizerUser.discordWebhook, message).catch(err =>
+                        console.error("Discord Webhook failed:", err.message)
+                    );
+                }
+            } catch (webhookErr) {
+                console.error("Webhook error:", webhookErr.message);
+            }
+        }
+
+        res.json({ msg: `Event status updated to ${targetStatus}`, event });
     } catch (err) {
         console.error(err.message);
         if (err.kind === "ObjectId") {
@@ -90,7 +169,7 @@ router.put('/:id/status', auth, async (req, res) => {
         }
         res.status(500).send("Server Error");
     }
-});
+})
 
 // @route   GET /api/events
 // @desc    Get all events with Search, Filters, and Personalization (user preferences)
@@ -100,18 +179,23 @@ router.put('/:id/status', auth, async (req, res) => {
 // @access  Public (Enhanced if token present)
 router.get('/', async (req, res) => {
     try {
+        // Auto-update stale event statuses before serving results
+        await syncEventStatuses();
+
         const { search, type, eligibility, startDate, endDate, trending, followed, status, organizerId } = req.query;
 
         // --- 1. STATUS FILTER ---
-        // By default, only show published or ongoing events
-        let query = { status: { $in: ['published', 'ongoing'] } };
+        // Default: all non-draft events. Narrow only when caller passes a specific status.
+        let query = { status: { $ne: 'draft' } };
 
         if (status) {
-            // Security: Prevent public from searching 'draft' events here
             if (status === 'draft') {
                 return res.status(403).json({ msg: "Draft events cannot be queried publicly." });
             }
-            query.status = status;
+            // 'all' is an alias for the default (all non-draft) — no change needed
+            if (status !== 'all') {
+                query.status = status;
+            }
         }
 
         // --- FILTER: Event Type & Eligibility ---
@@ -172,7 +256,6 @@ router.get('/', async (req, res) => {
         
         if (token) {
             try {
-                const jwt = require('jsonwebtoken'); 
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 user = await User.findById(decoded.user.id);
                 
@@ -214,7 +297,7 @@ router.get('/', async (req, res) => {
                 const eventObj = event.toObject();
                 let score = 0;
                 
-                if (followingIds.includes(event.organizer._id.toString())) {
+                if (event.organizer && followingIds.includes(event.organizer._id.toString())) {
                     score += 10;
                 }
                 if (event.tags && user.interests) {
@@ -239,6 +322,9 @@ router.get('/', async (req, res) => {
 // @access  Private (Organizer only)
 router.get("/my-created-events", auth, organizer, async (req, res) => {
     try {
+        // Auto-sync statuses before returning organizer's events
+        await syncEventStatuses();
+
         const { status } = req.query;
         
         // Always restrict to the logged-in organizer
@@ -257,24 +343,24 @@ router.get("/my-created-events", auth, organizer, async (req, res) => {
     }
 });
 
-// @route   GET /api/events/my-closed-event-analytics
-// @desc    Get analytics (revenue, attendance, sales) for all closed events by the organizer
-// @access  Private (Organizer only)
-router.get("/my-closed-event-analytics", auth, organizer, async (req, res) => {
+// @route   GET /api/events/my-completed-event-analytics
+// @desc    Get analytics (revenue, attendance, sales) for all completed events by the organizer
+// @access  Organizer only
+router.get("/my-completed-event-analytics", auth, organizer, async (req, res) => {
     try {
-        // 1. Find all closed events belonging to this organizer
-        const closedEvents = await Event.find({
+        // 1. Find all completed events belonging to this organizer
+        const completedEvents = await Event.find({
             organizer: req.user.id,
-            status: "closed"
+            status: "completed"
         }).select("_id name fee eventType registrationLimit stock");
 
-        if (closedEvents.length === 0) {
+        if (completedEvents.length === 0) {
             return res.json([]);
         }
 
-        const eventIds = closedEvents.map(e => e._id);
+        const eventIds = completedEvents.map(e => e._id);
 
-        // 2. Aggregate registration stats for all closed events in one DB call
+        // 2. Aggregate registration stats for all completed events in one DB call
         const aggregated = await Registration.aggregate([
             { $match: { event: { $in: eventIds } } },
             {
@@ -308,7 +394,7 @@ router.get("/my-closed-event-analytics", auth, organizer, async (req, res) => {
         });
 
         // 4. Merge event info with its stats, computing revenue using event.fee
-        const result = closedEvents.map(event => {
+        const result = completedEvents.map(event => {
             const stat = statsMap[event._id.toString()] || {
                 totalRegistrations: 0,
                 ticketsSold: 0,
@@ -330,24 +416,23 @@ router.get("/my-closed-event-analytics", auth, organizer, async (req, res) => {
 
         res.json(result);
     } catch (err) {
-        console.error("[GET /my-closed-event-analytics]", err.message);
+        console.error("[GET /my-completed-event-analytics]", err.message);
         res.status(500).json({ msg: "Server Error" });
     }
 });
 
 
 router.get('/:id', async (req, res) => {
-    console.log(`[GET /api/events/:id] Route hit — ID: ${req.params.id}`);
     try {
-        console.log(`[GET /api/events/:id] Querying DB for event ID: ${req.params.id}`);
-        const event = await Event.findById(req.params.id).populate("organizer", "firstName lastName");
-        console.log(`[GET /api/events/:id] DB query complete.`);
+        // Sync this single event's status before returning
+        await syncEventStatuses();
+
+        const event = await Event.findById(req.params.id)
+            .populate("organizer", "firstName lastName organizerName organizerCategory");
 
         if (!event) {
-            console.log(`[GET /api/events/:id] No event found for ID: ${req.params.id}`);
-            return res.status(404).json({ msg : "Event not found "});
+            return res.status(404).json({ msg : "Event not found"});
         }
-        console.log(`[GET /api/events/:id] Sending event data for: "${event.name}"`);
         res.json(event);
         
     } catch (err) {
@@ -376,36 +461,45 @@ router.put('/:id', auth, async (req, res) => {
             return res.json({ msg: "Draft updated successfully", event });
         }
 
-        // --- RULE 2: PUBLISHED (Restricted Edits) ---
-        if (event.status === 'published') {
-            if (updates.description) event.description = updates.description;
-            
-            if (updates.registrationDeadline) {
-                if (new Date(updates.registrationDeadline) < new Date(event.registrationDeadline)) {
-                    return res.status(400).json({ msg: "You can only EXTEND the deadline, not shorten it." });
-                }
-                event.registrationDeadline = updates.registrationDeadline;
-            }
-            
-            if (updates.registrationLimit) {
-                if (updates.registrationLimit < event.registrationLimit) {
-                    return res.status(400).json({ msg: "You can only INCREASE the capacity." });
-                }
-                event.registrationLimit = updates.registrationLimit;
-            }
-
-            // --- FORM LOCKING LOGIC ---
-            if (updates.formFields) {
+        // --- RULE 2: UPCOMING / PUBLISHED (Restricted Edits) ---
+        // Editable: description, registrationDeadline (extend only), registrationLimit (increase only)
+        // formFields: editable only while registrationCount === 0
+        if (event.status === 'upcoming' || event.status === 'published') {
+            // formFields — editable only before any registrations
+            if (Object.prototype.hasOwnProperty.call(updates, 'formFields')) {
                 if (event.registrationCount > 0) {
                     return res.status(400).json({ msg: "Form is locked because registrations have already been received." });
                 }
                 event.formFields = updates.formFields;
             }
-            const isNewlyPublished = updates.status === 'published' && event.status !== 'published';
-            
-            if (updates.status === 'published') event.status = 'published';
-            if (updates.status === 'closed') event.status = 'closed';
-            
+
+            // description — freely editable
+            if (Object.prototype.hasOwnProperty.call(updates, 'description')) {
+                event.description = updates.description;
+            }
+
+            // registrationDeadline — can only EXTEND
+            if (Object.prototype.hasOwnProperty.call(updates, 'registrationDeadline')) {
+                if (new Date(updates.registrationDeadline) < new Date(event.registrationDeadline)) {
+                    return res.status(400).json({ msg: "You can only EXTEND the deadline, not shorten it." });
+                }
+                event.registrationDeadline = updates.registrationDeadline;
+            }
+
+            // registrationLimit — can only INCREASE
+            if (Object.prototype.hasOwnProperty.call(updates, 'registrationLimit')) {
+                if (Number(updates.registrationLimit) < Number(event.registrationLimit)) {
+                    return res.status(400).json({ msg: "You can only INCREASE the capacity." });
+                }
+                if (Number(updates.registrationLimit) < event.registrationCount) {
+                    return res.status(400).json({ msg: "Registration limit cannot be less than existing registrations." });
+                }
+                event.registrationLimit = updates.registrationLimit;
+            }
+
+            // All other fields are locked for published events.
+
+            const isNewlyPublished = false; // status changes go through /status endpoint
             await event.save();
 
             // --- DISCORD WEBHOOK ---
@@ -415,7 +509,7 @@ router.put('/:id', auth, async (req, res) => {
                     if (organizerUser.discordWebhook) {
                         const axios = require('axios'); // Note: ensure you run `npm install axios` in backend
                         const message = {
-                            content: `🎉 **New Event Published by ${organizerUser.organizerName}!** 🎉\n\n**${event.name}**\n*${event.description}*\n\n📅 **Starts:** ${new Date(event.startDate).toLocaleString()}\n🎟️ **Type:** ${event.eventType}\n\nRegister now on Felicity Event Manager!`
+                            content: `**New Event Published by ${organizerUser.organizerName}!**\n\n**${event.name}**\n*${event.description}*\n\n**Starts:** ${new Date(event.startDate).toLocaleString()}\n**Type:** ${event.eventType}\n\nRegister now on Felicity Event Manager!`
                         };
                         // Fire and forget (we don't await so we don't slow down the user's API response)
                         axios.post(organizerUser.discordWebhook, message).catch(err => console.error("Discord Webhook failed:", err.message));
@@ -425,18 +519,17 @@ router.put('/:id', auth, async (req, res) => {
                 }
             }
 
-            return res.json({ msg: "Published event updated successfully", event });
+            return res.json({ msg: "Event updated successfully", event });
         }
 
-        // --- RULE 3: ONGOING / COMPLETED (Locked except status change) ---
-        if (event.status === 'ongoing' || event.status === 'completed' || event.status === 'closed') {
-            if (updates.status && ['completed', 'closed'].includes(updates.status)) {
-                event.status = updates.status;
-                await event.save();
-                return res.json({ msg: `Event marked as ${updates.status}`, event });
-            } else {
-                return res.status(400).json({ msg: "Event is locked. You can only change the status to Completed or Closed." });
-            }
+        // --- RULE 3: ONGOING — no edits allowed, status changes via /status endpoint ---
+        if (event.status === 'ongoing') {
+            return res.status(400).json({ msg: "Ongoing events are fully locked. Use the status action to mark as Completed." });
+        }
+
+        // --- RULE 4: COMPLETED — no edits whatsoever ---
+        if (event.status === 'completed') {
+            return res.status(400).json({ msg: "Completed events cannot be edited." });
         }
     } catch (err) {
         console.error(err.message);

@@ -15,8 +15,9 @@ const Navbar = () => {
                         {/* ADMIN LINKS */}
                         {user.role === 'admin' && (
                             <>
-                                <Link to="/admin-dashboard" style={linkStyle}>Manage Clubs</Link>
-                                <Link to="/admin-password-resets" style={linkStyle}>Password Resets</Link>
+                                <Link to="/admin" style={linkStyle}>Dashboard</Link>
+                                <Link to="/admin-dashboard" style={linkStyle}>Manage Clubs/Organizers</Link>
+                                <Link to="/admin-password-resets" style={linkStyle}>Password Reset Requests</Link>
                             </>
                         )}
                         {/* ORGANIZER LINKS (Section 10.1) */}
@@ -29,12 +30,12 @@ const Navbar = () => {
                             </>
                         )}
 
-                        {/* PARTICIPANT LINKS (Section 9.1) */}
+                        {/* PARTICIPANT LINKS */}
                         {user.role === 'participant' && (
                             <>
-                                <Link to="/dashboard" style={linkStyle}>My Events</Link>
+                                <Link to="/dashboard" style={linkStyle}>Dashboard</Link>
                                 <Link to="/browse-events" style={linkStyle}>Browse Events</Link>
-                                <Link to="/organizers" style={linkStyle}>Clubs</Link>
+                                <Link to="/organizers" style={linkStyle}>Clubs/Organizers</Link>
                                 <Link to="/profile" style={linkStyle}>Profile</Link>
                             </>
                         )}

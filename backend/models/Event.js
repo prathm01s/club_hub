@@ -17,6 +17,18 @@ const EventSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    isTeamEvent: {
+        type: Boolean,
+        default: false
+    },
+    minTeamSize: {
+        type: Number,
+        default: 1
+    },
+    maxTeamSize: {
+        type: Number,
+        default: 1
+    },
     registrationDeadline: {type: Date, required: true},
     startDate: {type: Date, required: true},
     endDate: {type: Date, required: true},
@@ -43,6 +55,6 @@ const EventSchema = new mongoose.Schema({
         default: 1 // Default to 1 (Normal events are always 1)
     },
     itemDetails: { type: Object },
-    status: {type: String, enum: ['draft', 'published', 'ongoing', 'closed'], default: 'draft'}
+    status: {type: String, enum: ['draft', 'upcoming', 'published', 'ongoing', 'completed'], default: 'draft'}
 }, {timestamps: true});
 module.exports = mongoose.model('Event', EventSchema);

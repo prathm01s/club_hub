@@ -13,10 +13,10 @@ const AdminDashboard = () => {
     const [createdCredentials, setCreatedCredentials] = useState(null);
     const [error, setError] = useState("");
 
-    // Fetch existing organizers
+    // Fetch existing organizers using the admin endpoint (includes email)
     const fetchOrganizers = async () => {
         try {
-            const response = await fetch("http://localhost:5000/api/users/organizers", {
+            const response = await fetch("http://localhost:5000/api/admin/organizers", {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await response.json();
@@ -30,6 +30,7 @@ const AdminDashboard = () => {
 
     useEffect(() => {
         fetchOrganizers();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [authTokens]);
 
     const handleInputChange = (e) => {
@@ -101,7 +102,7 @@ const AdminDashboard = () => {
         try {
             const response = await fetch(`http://localhost:5000/api/admin/organizers/${id}/toggle-status`, {
                 method: "PUT",
-                headers: { "x-auth-token": authTokens.token}
+                headers: { "x-auth-token": authTokens.token }
             });
             if (response.ok) fetchOrganizers();
         } catch (err) {
@@ -115,14 +116,14 @@ const AdminDashboard = () => {
             <h1>Admin Dashboard</h1>
 
             <div style={{ display: "flex", gap: "30px", alignItems: "flex-start", flexWrap: "wrap" }}>
-                
+
                 {/* LEFT SIDE: Create Organizer Form */}
                 <div style={{ flex: "1 1 400px", background: "#f9f9f9", padding: "20px", borderRadius: "8px", border: "1px solid #ddd" }}>
                     <h2>Provision New Organizer</h2>
                     <p style={{ color: "gray", fontSize: "0.9rem" }}>The system will auto-generate a secure password.</p>
-                    
+
                     {error && <p style={{ color: "red", fontWeight: "bold" }}>{error}</p>}
-                    
+
                     {createdCredentials && (
                         <div style={{ background: "#d4edda", padding: "15px", borderRadius: "5px", marginBottom: "15px", border: "1px solid #c3e6cb" }}>
                             <h4 style={{ margin: "0 0 10px 0", color: "#155724" }}>✅ Organizer Created!</h4>
@@ -138,7 +139,7 @@ const AdminDashboard = () => {
                         <input type="email" name="contactEmail" placeholder="Public Contact Email" value={formData.contactEmail} onChange={handleInputChange} required style={inputStyle} />
                         <input type="text" name="category" placeholder="Category (e.g., Technical, Cultural)" value={formData.category} onChange={handleInputChange} required style={inputStyle} />
                         <textarea name="description" placeholder="Short description of the club..." value={formData.description} onChange={handleInputChange} required style={{ ...inputStyle, height: "80px" }} />
-                        
+
                         <button type="submit" style={{ padding: "12px", background: "#007bff", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
                             Create Organizer Account
                         </button>
@@ -148,7 +149,7 @@ const AdminDashboard = () => {
                 {/* RIGHT SIDE: Manage Existing Organizers */}
                 <div style={{ flex: "2 1 500px", background: "white", padding: "20px", borderRadius: "8px", border: "1px solid #ddd" }}>
                     <h2>Manage Organizers ({organizers.length})</h2>
-                    
+
                     <div style={{ overflowX: "auto" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
                             <thead>
@@ -166,14 +167,14 @@ const AdminDashboard = () => {
                                         <td style={tdStyle}>{org.organizerCategory}</td>
                                         <td style={tdStyle}>{org.email}</td>
                                         <td style={tdStyle}>
-                                            {org.isActive === false && <span style={{color: 'red', marginRight: '10px'}}>(Disabled)</span>}
+                                            {org.isActive === false && <span style={{ color: 'red', marginRight: '10px' }}>(Disabled)</span>}
                                             <button
                                                 onClick={() => handleToggleStatus(org._id, org.isActive)}
-                                                style={{ padding: '5px 10px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '3px', cursor: 'pointer', marginRight: '10px'}}
+                                                style={{ padding: '5px 10px', background: '#ffc107', color: 'black', border: 'none', borderRadius: '3px', cursor: 'pointer', marginRight: '10px' }}
                                             >
                                                 {org.isActive === false ? 'Activate' : 'Disable'}
                                             </button>
-                                            <button 
+                                            <button
                                                 onClick={() => handleDelete(org._id, org.organizerName)}
                                                 style={{ padding: "5px 10px", background: "#dc3545", color: "white", border: "none", borderRadius: "3px", cursor: "pointer" }}
                                             >

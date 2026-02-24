@@ -1,4 +1,4 @@
-import { createContext, useState, useEffect } from "react";
+import { createContext, useState } from "react";
 import { jwtDecode } from "jwt-decode"; // Correct import for version 4.x
 import { useNavigate } from "react-router-dom";
 
@@ -6,7 +6,7 @@ const AuthContext = createContext();
 export default AuthContext;
 
 export const AuthProvider = ({ children }) => {
-    let [authTokens, setAuthTokens] = useState(() => 
+    let [authTokens, setAuthTokens] = useState(() =>
         localStorage.getItem("authTokens") ? JSON.parse(localStorage.getItem("authTokens")) : null
     );
 
@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
         e.preventDefault();
         const response = await fetch("http://localhost:5000/api/auth/login", {
             method: "POST",
-            headers: {"Content-Type": "application/json"},
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
                 email: e.target.email.value,
                 password: e.target.password.value
@@ -35,11 +35,13 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem("authTokens", JSON.stringify(data));
 
             if (decodedUser.user.role === 'admin') {
-                navigate("/admin-dashboard"); // You will build this later
+                navigate("/admin-dashboard");
             } else if (decodedUser.user.role === 'organizer') {
                 navigate("/organizer-dashboard");
+            } else if (decodedUser.user.role === 'participant' && !decodedUser.user.onboardingComplete) {
+                navigate("/onboarding");
             } else {
-                navigate("/dashboard"); // Participant
+                navigate("/dashboard"); // Participant (onboarding done)
             }
         } else {
             alert("Something went wrong: " + data.msg);

@@ -1,11 +1,12 @@
 import { useEffect, useState, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import AuthContext from "../context/AuthContext";
+import FeedbackDashboard from "../components/FeedbackDashboard";
 
 const STATUS_COLORS = {
     registered: { bg: "#d4edda", color: "#155724" },
-    attended:   { bg: "#cce5ff", color: "#004085" },
-    cancelled:  { bg: "#f8d7da", color: "#721c24" },
+    attended: { bg: "#cce5ff", color: "#004085" },
+    cancelled: { bg: "#f8d7da", color: "#721c24" },
 };
 
 const OrganizerEventDetailPage = () => {
@@ -42,13 +43,40 @@ const OrganizerEventDetailPage = () => {
     }, [id, authTokens]);
 
     // --- Analytics ---
-    const activeRegs   = registrations.filter(r => r.status !== "cancelled");
-    const ticketsSold  = activeRegs.reduce((sum, r) => sum + (r.quantity || 1), 0);
+    const activeRegs = registrations.filter(r => r.status !== "cancelled");
+    const ticketsSold = activeRegs.reduce((sum, r) => sum + (r.quantity || 1), 0);
     const totalRevenue = ticketsSold * (event?.fee || 0);
-    const attended     = registrations.filter(r => r.status === "attended").length;
-    const capacity     = event?.eventType === "merchandise" ? event?.stock : event?.registrationLimit;
-    const fillRate     = capacity ? Math.round((ticketsSold / capacity) * 100) : 0;
-    const attendRate   = ticketsSold ? Math.round((attended / ticketsSold) * 100) : 0;
+    const attended = registrations.filter(r => r.status === "attended").length;
+    const capacity = event?.eventType === "merchandise" ? event?.stock : event?.registrationLimit;
+    const fillRate = capacity ? Math.round((ticketsSold / capacity) * 100) : 0;
+    const attendRate = ticketsSold ? Math.round((attended / ticketsSold) * 100) : 0;
+
+    // Team completion (for hackathon events): count unique completed team IDs in registrations
+    const completedTeamsCount = event?.isTeamEvent
+        ? new Set(registrations.filter(r => r.team && r.status !== 'cancelled').map(r =>
+            typeof r.team === 'object' ? r.team._id || r.team : r.team
+        )).size
+        : 0;
+
+    // --- Attendance Toggle ---
+    const handleToggleAttendance = async (regId) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/registrations/${regId}/attend`, {
+                method: "PUT",
+                headers: { "x-auth-token": authTokens.token }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setRegistrations(prev =>
+                    prev.map(r => r._id === regId ? { ...r, status: data.registration.status } : r)
+                );
+            } else {
+                alert(data.msg || "Failed to update attendance.");
+            }
+        } catch (err) {
+            alert("Server error.");
+        }
+    };
 
     // --- Search & Filter ---
     const filteredRegistrations = registrations.filter(reg => {
@@ -88,8 +116,49 @@ const OrganizerEventDetailPage = () => {
         document.body.removeChild(link);
     };
 
+    // --- Status Actions ---
+    const handleCloseRegistrations = async () => {
+        if (!window.confirm("Close registrations? The event will move to 'Ongoing' and no new registrations will be accepted.")) return;
+        try {
+            const res = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
+                body: JSON.stringify({ status: "ongoing" })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setEvent(prev => ({ ...prev, status: "ongoing" }));
+                alert("Registrations closed. Event is now Ongoing.");
+            } else {
+                alert(data.msg || "Failed to close registrations.");
+            }
+        } catch (err) {
+            alert("Server error.");
+        }
+    };
+
+    const handleCompleteEvent = async () => {
+        if (!window.confirm("Mark this event as completed?")) return;
+        try {
+            const res = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
+                body: JSON.stringify({ status: "completed" })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setEvent(prev => ({ ...prev, status: "completed" }));
+                alert("Event marked as completed.");
+            } else {
+                alert(data.msg || "Failed to update status.");
+            }
+        } catch (err) {
+            alert("Server error.");
+        }
+    };
+
     if (loading) return <div style={{ padding: "40px", textAlign: "center" }}>Loading event data...</div>;
-    if (!event)  return <div style={{ padding: "40px", textAlign: "center" }}>Event not found or unauthorized.</div>;
+    if (!event) return <div style={{ padding: "40px", textAlign: "center" }}>Event not found or unauthorized.</div>;
 
     return (
         <div style={{ padding: "20px", maxWidth: "1200px", margin: "auto" }}>
@@ -106,8 +175,8 @@ const OrganizerEventDetailPage = () => {
                         <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                             <h1 style={{ margin: 0 }}>{event.name}</h1>
                             <span style={{
-                                background: event.status === 'published' ? '#cce5ff' : event.status === 'ongoing' ? '#d4edda' : event.status === 'closed' ? '#f8d7da' : '#e2e3e5',
-                                color: event.status === 'published' ? '#004085' : event.status === 'ongoing' ? '#155724' : event.status === 'closed' ? '#721c24' : '#383d41',
+                                background: event.status === 'upcoming' ? '#e2d9f3' : event.status === 'ongoing' ? '#d4edda' : event.status === 'completed' ? '#f8d7da' : '#e2e3e5',
+                                color: event.status === 'upcoming' ? '#6f42c1' : event.status === 'ongoing' ? '#155724' : event.status === 'completed' ? '#721c24' : '#383d41',
                                 padding: "4px 12px", borderRadius: "12px", fontWeight: "bold", fontSize: "0.9rem", textTransform: "capitalize"
                             }}>{event.status}</span>
                         </div>
@@ -131,6 +200,34 @@ const OrganizerEventDetailPage = () => {
                             <p style={{ margin: "10px 0 0", color: "#555" }}>{event.description}</p>
                         )}
                     </div>
+
+                    {/* Status action buttons */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px", minWidth: "180px" }}>
+                        <button
+                            onClick={() => navigate(`/organizer/edit-event/${id}`)}
+                            style={{ padding: "9px 16px", background: "#6c757d", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
+                        >
+                            ✏️ Edit Event
+                        </button>
+
+                        {(event.status === 'upcoming' || event.status === 'published') && (
+                            <button
+                                onClick={handleCloseRegistrations}
+                                style={{ padding: "9px 16px", background: "#fd7e14", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
+                            >
+                                🔒 Close Registrations
+                            </button>
+                        )}
+
+                        {(event.status === 'upcoming' || event.status === 'published' || event.status === 'ongoing') && (
+                            <button
+                                onClick={handleCompleteEvent}
+                                style={{ padding: "9px 16px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}
+                            >
+                                ✅ Mark as Completed
+                            </button>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -143,6 +240,7 @@ const OrganizerEventDetailPage = () => {
                     { label: "Fill Rate", value: `${fillRate}%` },
                     { label: "Attendance", value: `${attended} (${attendRate}%)` },
                     { label: "Est. Revenue", value: `₹${totalRevenue.toLocaleString()}` },
+                    ...(event.isTeamEvent ? [{ label: "Completed Teams", value: completedTeamsCount }] : []),
                 ].map(stat => (
                     <div key={stat.label} style={{ background: "white", border: "1px solid #ddd", borderRadius: "8px", padding: "16px", textAlign: "center" }}>
                         <div style={{ fontSize: "1.5rem", fontWeight: "bold", color: "#007bff" }}>{stat.value}</div>
@@ -194,6 +292,7 @@ const OrganizerEventDetailPage = () => {
                                 <th style={thStyle}>Team</th>
                                 <th style={thStyle}>Qty</th>
                                 <th style={thStyle}>Ticket ID</th>
+                                <th style={thStyle}>Attendance</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -228,17 +327,36 @@ const OrganizerEventDetailPage = () => {
                                                 {reg.ticketId.substring(0, 8)}…
                                             </span>
                                         </td>
+                                        <td style={tdStyle}>
+                                            {reg.status !== 'cancelled' && (
+                                                <button
+                                                    onClick={() => handleToggleAttendance(reg._id)}
+                                                    title={reg.status === 'attended' ? 'Click to unmark attendance' : 'Click to mark as attended'}
+                                                    style={{
+                                                        padding: "4px 10px", border: "none", borderRadius: "4px", cursor: "pointer",
+                                                        fontSize: "0.78rem", fontWeight: "bold",
+                                                        background: reg.status === 'attended' ? '#28a745' : '#e9ecef',
+                                                        color: reg.status === 'attended' ? 'white' : '#495057'
+                                                    }}
+                                                >
+                                                    {reg.status === 'attended' ? '✓ Attended' : 'Mark'}
+                                                </button>
+                                            )}
+                                        </td>
                                     </tr>
                                 ))
                             ) : (
                                 <tr>
-                                    <td colSpan="8" style={{ textAlign: "center", padding: "24px", color: "gray" }}>No participants match your search.</td>
+                                    <td colSpan="9" style={{ textAlign: "center", padding: "24px", color: "gray" }}>No participants match your search.</td>
                                 </tr>
                             )}
                         </tbody>
                     </table>
                 </div>
             </div>
+
+            {/* SECTION 4: Feedback Dashboard */}
+            <FeedbackDashboard eventId={id} />
         </div>
     );
 };

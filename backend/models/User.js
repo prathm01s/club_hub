@@ -58,6 +58,10 @@ const UserSchema = new mongoose.Schema({
     following: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User' // List of Organizers they follow
-    }]
-}, { timestamps: true});
+    }],
+    onboardingComplete: {
+        type: Boolean,
+        default: false
+    }
+}, { timestamps: true });
 module.exports = mongoose.model('User', UserSchema);

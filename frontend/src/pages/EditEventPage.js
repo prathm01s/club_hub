@@ -84,6 +84,13 @@ const EditEventPage = () => {
             : [];
 
         const payload = { ...eventData, tags: tagsArray };
+        // For published/upcoming events, restrict which fields are sent.
+        if (isPublished) {
+            // formFields editable only when no registrations yet
+            const allowedPublished = ['description', 'registrationDeadline', 'registrationLimit'];
+            if (!formLocked) allowedPublished.push('formFields');
+            Object.keys(payload).forEach(k => { if (!allowedPublished.includes(k)) delete payload[k]; });
+        }
 
         try {
             const response = await fetch(`http://localhost:5000/api/events/${id}`, {
@@ -109,7 +116,7 @@ const EditEventPage = () => {
     };
 
     const handlePublish = async () => {
-        if (!window.confirm("Are you sure you want to publish this event? The form and dates will be locked.")) return;
+        if (!window.confirm("Are you sure you want to publish this event?")) return;
 
         try {
             const response = await fetch(`http://localhost:5000/api/events/${id}/status`, {
@@ -127,20 +134,40 @@ const EditEventPage = () => {
     };
 
     const handleCloseRegistrations = async () => {
-        if (!window.confirm("Are you sure you want to close registrations? No new registrations will be accepted.")) return;
+        if (!window.confirm("Close registrations? The event will move to 'Ongoing' status and no new registrations will be accepted.")) return;
+        try {
+            const response = await fetch(`http://localhost:5000/api/events/${id}/status`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
+                body: JSON.stringify({ status: "ongoing" })
+            });
+            const data = await response.json();
+            if (response.ok) {
+                alert("Registrations closed. Event is now Ongoing.");
+                navigate('/organizer-dashboard');
+            } else {
+                alert(data.msg || "Failed to close registrations.");
+            }
+        } catch (err) {
+            alert("Server error.");
+        }
+    };
+
+    const handleCompleteEvent = async () => {
+        if (!window.confirm("Are you sure you want to mark this event as completed?")) return;
 
         try {
             const response = await fetch(`http://localhost:5000/api/events/${id}/status`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
-                body: JSON.stringify({ status: "closed" })
+                body: JSON.stringify({ status: "completed" })
             });
             const data = await response.json();
             if (response.ok) {
-                alert("Registrations closed.");
+                alert("Event marked as completed.");
                 navigate('/organizer-dashboard');
             } else {
-                alert(data.msg || "Failed to close registrations.");
+                alert(data.msg || "Failed to complete event.");
             }
         } catch (err) {
             alert("Server error.");
@@ -151,9 +178,23 @@ const EditEventPage = () => {
     if (!eventData) return <div style={{ color: "red", padding: "20px" }}>{msg.text}</div>;
 
     const isDraft     = eventData.status === "draft";
-    const isPublished = eventData.status === "published";
-    const isLocked    = eventData.status === "ongoing" || eventData.status === "closed";
-    const formLocked  = eventData.registrationCount > 0;
+    const isPublished = eventData.status === "published" || eventData.status === "upcoming";
+    const isOngoing   = eventData.status === "ongoing";
+    const isCompleted = eventData.status === "completed";
+    // Fields locked in published/upcoming: everything EXCEPT description, registrationDeadline, registrationLimit
+    const isFullyLocked      = isOngoing || isCompleted;           // nothing editable
+    const isPublishedLocked  = isPublished || isFullyLocked;       // most fields locked
+    const formLocked         = (isPublished && eventData.registrationCount > 0) || isOngoing || isCompleted;
+    // keep isLocked alias for form-builder section reuse
+    const isLocked = isFullyLocked;
+
+    const statusColor = {
+        draft:     "#6c757d",
+        upcoming:  "#6f42c1",
+        published: "#007bff",
+        ongoing:   "#28a745",
+        completed: "#dc3545"
+    }[eventData.status] || "#6c757d";
 
     return (
         <div style={{ maxWidth: "800px", margin: "auto", padding: "20px" }}>
@@ -164,7 +205,7 @@ const EditEventPage = () => {
             <h1>Edit Event: {eventData.name}</h1>
 
             <div style={{ padding: "8px 14px", background: "#f8f9fa", borderRadius: "5px", marginBottom: "20px", display: "inline-block", fontWeight: "bold" }}>
-                Status: <span style={{ textTransform: "uppercase", color: isDraft ? "#6c757d" : isPublished ? "#007bff" : "#dc3545" }}>{eventData.status}</span>
+                Status: <span style={{ textTransform: "uppercase", color: statusColor }}>{eventData.status}</span>
             </div>
 
             {msg.text && (
@@ -173,13 +214,24 @@ const EditEventPage = () => {
                 </div>
             )}
 
-            {isLocked ? (
-                <div style={{ background: "#fff3cd", padding: "20px", borderRadius: "8px", border: "1px solid #ffeeba" }}>
-                    <h3 style={{ color: "#856404", marginTop: 0 }}>Event Locked</h3>
-                    <p>Ongoing and Closed events cannot be edited.</p>
+            {isCompleted ? (
+                <div style={{ background: "#f8d7da", padding: "20px", borderRadius: "8px", border: "1px solid #f5c6cb" }}>
+                    <h3 style={{ color: "#721c24", marginTop: 0 }}>Event Completed</h3>
+                    <p>Completed events are fully locked and cannot be edited or changed.</p>
                 </div>
             ) : (
                 <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+
+                    {/* Ongoing lock notice */}
+                    {isOngoing && (
+                        <div style={{ background: "#d4edda", padding: "14px 18px", borderRadius: "6px", border: "1px solid #c3e6cb", display: "flex", alignItems: "center", gap: "10px" }}>
+                            <span style={{ fontSize: "1.2rem" }}>🔒</span>
+                            <div>
+                                <strong style={{ color: "#155724" }}>Event is Ongoing — form locked.</strong>
+                                <span style={{ color: "#155724", marginLeft: "8px" }}>No edits allowed. You can mark it as Completed below.</span>
+                            </div>
+                        </div>
+                    )}
 
                     {/* ── SECTION 1: Core Details ── */}
                     <div style={sectionStyle}>
@@ -189,24 +241,22 @@ const EditEventPage = () => {
                             <div>
                                 <label style={labelStyle}>Event Name</label>
                                 <input type="text" name="name" value={eventData.name} onChange={handleChange}
-                                    disabled={!isDraft} style={fieldStyle(!isDraft)} />
-                                {!isDraft && <small style={{ color: "gray" }}>Locked after publishing.</small>}
+                                    disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Event Type</label>
                                 <select name="eventType" value={eventData.eventType} onChange={handleChange}
-                                    disabled={!isDraft} style={fieldStyle(!isDraft)}>
+                                    disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)}>
                                     <option value="normal">Normal Event</option>
                                     <option value="merchandise">Merchandise</option>
                                 </select>
-                                {!isDraft && <small style={{ color: "gray" }}>Locked after publishing.</small>}
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Eligibility</label>
                                 <select name="eligibility" value={eventData.eligibility} onChange={handleChange}
-                                    disabled={!isDraft} style={fieldStyle(!isDraft)}>
+                                    disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)}>
                                     <option value="all">Open to All</option>
                                     <option value="iiit-only">IIIT Students Only</option>
                                 </select>
@@ -215,7 +265,7 @@ const EditEventPage = () => {
                             <div>
                                 <label style={labelStyle}>Max Capacity</label>
                                 <input type="number" name="registrationLimit" value={eventData.registrationLimit}
-                                    onChange={handleChange} style={fieldStyle(false)} />
+                                    onChange={handleChange} disabled={isFullyLocked} style={fieldStyle(isFullyLocked)} />
                                 {isPublished && <small style={{ color: "orange" }}>You can only INCREASE this limit.</small>}
                             </div>
 
@@ -224,41 +274,40 @@ const EditEventPage = () => {
                                     {eventData.eventType === "merchandise" ? "Price per Item (₹)" : "Entry Fee (₹)"}
                                 </label>
                                 <input type="number" name="fee" min="0" value={eventData.fee || 0}
-                                    onChange={handleChange} disabled={!isDraft} style={fieldStyle(!isDraft)} />
-                                {!isDraft && <small style={{ color: "gray" }}>Locked after publishing.</small>}
+                                    onChange={handleChange} disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                             </div>
 
                             <div>
                                 <label style={labelStyle}>Tags <span style={{ color: "gray", fontWeight: "normal" }}>(comma-separated)</span></label>
                                 <input type="text" name="tags" value={eventData.tags || ""}
                                     placeholder="e.g. tech, hackathon, coding"
-                                    onChange={handleChange} disabled={!isDraft} style={fieldStyle(!isDraft)} />
+                                    onChange={handleChange} disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                             </div>
                         </div>
 
                         <div style={{ marginTop: "15px" }}>
                             <label style={labelStyle}>Description</label>
                             <textarea name="description" value={eventData.description} onChange={handleChange}
-                                style={{ ...fieldStyle(false), height: "100px" }} />
-                            <small style={{ color: "green" }}>Editable in all statuses.</small>
+                                disabled={isFullyLocked}
+                                style={{ ...fieldStyle(isFullyLocked), height: "100px" }} />
+                            {isPublished && <small style={{ color: "green" }}>Editable in published state.</small>}
                         </div>
 
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginTop: "15px" }}>
                             <div>
                                 <label style={labelStyle}>Start Date</label>
                                 <input type="datetime-local" name="startDate" value={eventData.startDate}
-                                    onChange={handleChange} disabled={!isDraft} style={fieldStyle(!isDraft)} />
-                                {!isDraft && <small style={{ color: "gray" }}>Locked after publishing.</small>}
+                                    onChange={handleChange} disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                             </div>
                             <div>
                                 <label style={labelStyle}>End Date</label>
                                 <input type="datetime-local" name="endDate" value={eventData.endDate}
-                                    onChange={handleChange} disabled={!isDraft} style={fieldStyle(!isDraft)} />
+                                    onChange={handleChange} disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                             </div>
                             <div>
                                 <label style={labelStyle}>Reg. Deadline</label>
                                 <input type="datetime-local" name="registrationDeadline" value={eventData.registrationDeadline}
-                                    onChange={handleChange} style={fieldStyle(false)} />
+                                    onChange={handleChange} disabled={isFullyLocked} style={fieldStyle(isFullyLocked)} />
                                 {isPublished && <small style={{ color: "orange" }}>You can only EXTEND this date.</small>}
                             </div>
                         </div>
@@ -268,12 +317,12 @@ const EditEventPage = () => {
                                 <div>
                                     <label style={labelStyle}>Total Stock</label>
                                     <input type="number" name="stock" value={eventData.stock || ""}
-                                        onChange={handleChange} disabled={!isDraft} style={fieldStyle(!isDraft)} />
+                                        onChange={handleChange} disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                                 </div>
                                 <div>
                                     <label style={labelStyle}>Max per User</label>
                                     <input type="number" name="maxItemsPerUser" value={eventData.maxItemsPerUser || 1}
-                                        onChange={handleChange} disabled={!isDraft} style={fieldStyle(!isDraft)} />
+                                        onChange={handleChange} disabled={isPublishedLocked} style={fieldStyle(isPublishedLocked)} />
                                 </div>
                             </div>
                         )}
@@ -285,12 +334,17 @@ const EditEventPage = () => {
                             <h2 style={{ margin: 0 }}>2. Registration Form Builder</h2>
                             {formLocked && (
                                 <span style={{ background: "#dc3545", color: "white", padding: "5px 10px", borderRadius: "4px", fontWeight: "bold", fontSize: "0.85rem" }}>
-                                    🔒 Locked (Registrations Received)
+                                    Locked (Registrations Received)
                                 </span>
                             )}
-                            {!formLocked && !isDraft && (
+                            {!formLocked && isDraft && (
                                 <span style={{ background: "#d4edda", color: "#155724", padding: "5px 10px", borderRadius: "4px", fontSize: "0.85rem" }}>
-                                    ✏️ Form editable until first registration
+                                    Form editable until published
+                                </span>
+                            )}
+                            {!formLocked && isPublished && (
+                                <span style={{ background: "#fff3cd", color: "#856404", padding: "5px 10px", borderRadius: "4px", fontSize: "0.85rem" }}>
+                                    Editable until first registration
                                 </span>
                             )}
                         </div>
@@ -298,13 +352,13 @@ const EditEventPage = () => {
                         <p style={{ color: "gray", marginTop: 0 }}>Custom questions participants must answer when registering.</p>
 
                         {(eventData.formFields || []).map((field, index) => (
-                            <div key={index} style={{ border: "1px solid #ccc", padding: "15px", marginBottom: "10px", background: "white", opacity: (formLocked) ? 0.6 : 1 }}>
+                            <div key={index} style={{ border: "1px solid #ccc", padding: "15px", marginBottom: "10px", background: "white", opacity: (formLocked || isLocked) ? 0.6 : 1 }}>
                                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                                     <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                        <button type="button" disabled={index === 0 || formLocked}
+                                        <button type="button" disabled={index === 0 || formLocked || isLocked}
                                             onClick={() => moveFormField(index, -1)}
                                             style={{ padding: "2px 6px", cursor: "pointer" }}>↑</button>
-                                        <button type="button" disabled={index === eventData.formFields.length - 1 || formLocked}
+                                        <button type="button" disabled={index === eventData.formFields.length - 1 || formLocked || isLocked}
                                             onClick={() => moveFormField(index, 1)}
                                             style={{ padding: "2px 6px", cursor: "pointer" }}>↓</button>
                                     </div>
@@ -312,12 +366,12 @@ const EditEventPage = () => {
                                     <input type="text" placeholder="Question Label"
                                         value={field.label}
                                         onChange={(e) => updateFormField(index, "label", e.target.value)}
-                                        disabled={formLocked}
+                                        disabled={formLocked || isLocked}
                                         style={{ flex: 1, padding: "8px" }} />
 
                                     <select value={field.fieldType}
                                         onChange={(e) => updateFormField(index, "fieldType", e.target.value)}
-                                        disabled={formLocked}
+                                        disabled={formLocked || isLocked}
                                         style={{ padding: "8px" }}>
                                         <option value="text">Text Input</option>
                                         <option value="number">Number Input</option>
@@ -329,12 +383,12 @@ const EditEventPage = () => {
                                     <label style={{ display: "flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}>
                                         <input type="checkbox" checked={field.required}
                                             onChange={(e) => updateFormField(index, "required", e.target.checked)}
-                                            disabled={formLocked} /> Required
+                                            disabled={formLocked || isLocked} /> Required
                                     </label>
 
                                     <button type="button" onClick={() => removeFormField(index)}
-                                        disabled={formLocked}
-                                        style={{ background: (formLocked) ? "gray" : "red", color: "white", border: "none", padding: "8px 12px", cursor: "pointer" }}>
+                                        disabled={formLocked || isLocked}
+                                        style={{ background: (formLocked || isLocked) ? "gray" : "red", color: "white", border: "none", padding: "8px 12px", cursor: "pointer" }}>
                                         X
                                     </button>
                                 </div>
@@ -344,7 +398,7 @@ const EditEventPage = () => {
                                         placeholder="Options separated by commas (e.g. Veg, Non-Veg)"
                                         value={field.options ? field.options.join(",") : ""}
                                         onChange={(e) => updateFormField(index, "options", e.target.value.split(","))}
-                                        disabled={formLocked}
+                                        disabled={formLocked || isLocked}
                                         style={{ width: "100%", padding: "8px", boxSizing: "border-box", marginTop: "8px" }} />
                                 )}
 
@@ -355,27 +409,42 @@ const EditEventPage = () => {
                         ))}
 
                         <button type="button" onClick={addFormField}
-                            disabled={formLocked}
-                            style={{ padding: "8px 15px", background: (formLocked) ? "#ccc" : "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: (formLocked) ? "not-allowed" : "pointer" }}>
+                            disabled={formLocked || isLocked}
+                            style={{ padding: "8px 15px", background: (formLocked || isLocked) ? "#ccc" : "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: (formLocked || isLocked) ? "not-allowed" : "pointer" }}>
                             + Add Question
                         </button>
                     </div>
 
                     {/* ── SECTION 3: Actions ── */}
-                    <div style={{ display: "flex", gap: "15px" }}>
-                        <button type="submit" style={{ flex: 1, padding: "12px", background: "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
-                            Save Changes
-                        </button>
-
+                    <div style={{ display: "flex", gap: "15px", flexWrap: "wrap" }}>
+                        {/* Draft: Save + Publish */}
                         {isDraft && (
-                            <button type="button" onClick={handlePublish} style={{ flex: 1, padding: "12px", background: "#007bff", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
-                                Publish Event
-                            </button>
+                            <>
+                                <button type="submit" style={{ flex: 1, minWidth: "140px", padding: "12px", background: "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                                    Save Draft
+                                </button>
+                                <button type="button" onClick={handlePublish} style={{ flex: 1, minWidth: "140px", padding: "12px", background: "#007bff", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                                    Publish Event
+                                </button>
+                            </>
                         )}
 
-                        {(isPublished || eventData.status === "ongoing") && (
-                            <button type="button" onClick={handleCloseRegistrations} style={{ flex: 1, padding: "12px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
-                                🚫 Close Registrations
+                        {/* Published: Save (desc/deadline/capacity) + Close Registrations */}
+                        {isPublished && (
+                            <>
+                                <button type="submit" style={{ flex: 1, minWidth: "140px", padding: "12px", background: "#28a745", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                                    Save Changes
+                                </button>
+                                <button type="button" onClick={handleCloseRegistrations} style={{ flex: 1, minWidth: "160px", padding: "12px", background: "#fd7e14", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                                    Close Registrations
+                                </button>
+                            </>
+                        )}
+
+                        {/* Ongoing: Mark Completed only */}
+                        {isOngoing && (
+                            <button type="button" onClick={handleCompleteEvent} style={{ flex: 1, minWidth: "160px", padding: "12px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                                Mark as Completed
                             </button>
                         )}
                     </div>

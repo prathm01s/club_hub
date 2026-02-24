@@ -4,11 +4,13 @@ import AuthContext from "../context/AuthContext";
 const OrganizerProfilePage = () => {
     const { authTokens } = useContext(AuthContext);
     const [profileData, setProfileData] = useState({
-        organizerName: "", organizerCategory: "", description: "", 
+        organizerName: "", organizerCategory: "", description: "",
         contactEmail: "", contactNumber: "", discordWebhook: "", email: ""
     });
     const [msg, setMsg] = useState({ type: "", text: "" });
     const [loading, setLoading] = useState(true);
+    const [resetMsg, setResetMsg] = useState({ type: "", text: "" });
+    const [resetLoading, setResetLoading] = useState(false);
 
     useEffect(() => {
         const fetchProfile = async () => {
@@ -62,6 +64,28 @@ const OrganizerProfilePage = () => {
         }
     };
 
+    const handleRequestPasswordReset = async () => {
+        if (!window.confirm("Request a password reset? The admin will review your request and generate a new password for you.")) return;
+        setResetLoading(true);
+        setResetMsg({ type: "", text: "" });
+        try {
+            const res = await fetch("http://localhost:5000/api/users/request-password-reset", {
+                method: "POST",
+                headers: { "x-auth-token": authTokens.token }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                setResetMsg({ type: "success", text: data.msg || "Request submitted successfully. The admin will process it shortly." });
+            } else {
+                setResetMsg({ type: "error", text: data.msg || "Failed to submit request." });
+            }
+        } catch (err) {
+            setResetMsg({ type: "error", text: "Server error." });
+        } finally {
+            setResetLoading(false);
+        }
+    };
+
     if (loading) return <div>Loading Profile...</div>;
 
     return (
@@ -70,7 +94,7 @@ const OrganizerProfilePage = () => {
 
             {/* Locked Identity */}
             <div style={{ background: "#e9ecef", padding: "15px", borderRadius: "8px", marginBottom: "20px" }}>
-                <p style={{ margin: 0 }}><strong>Login Email:</strong> {profileData.email} 🔒 (Cannot be changed)</p>
+                <p style={{ margin: 0 }}><strong>Login Email:</strong> {profileData.email} (Cannot be changed)</p>
             </div>
 
             {msg.text && (
@@ -98,9 +122,9 @@ const OrganizerProfilePage = () => {
                 </div>
                 <div>
                     <label style={{ fontWeight: "bold" }}>Description</label>
-                    <textarea name="description" value={profileData.description} onChange={handleChange} required style={{...inputStyle, height: "80px"}} />
+                    <textarea name="description" value={profileData.description} onChange={handleChange} required style={{ ...inputStyle, height: "80px" }} />
                 </div>
-                
+
                 <hr style={{ margin: "20px 0", border: "1px solid #ddd" }} />
 
                 <div>
@@ -113,6 +137,27 @@ const OrganizerProfilePage = () => {
                     Save Profile Changes
                 </button>
             </form>
+
+            {/* Security Settings */}
+            <div style={{ background: "#fff3cd", padding: "20px", borderRadius: "8px", border: "1px solid #ffeeba", marginTop: "20px" }}>
+                <h2 style={{ marginTop: 0 }}>Security Settings</h2>
+                <p style={{ color: "#856404", marginBottom: "15px" }}>
+                    As an organizer, password resets are handled by the admin. Click below to submit a request.
+                    The admin will review it and provide you with a new password.
+                </p>
+                {resetMsg.text && (
+                    <div style={{ padding: "10px", color: "white", background: resetMsg.type === "error" ? "#dc3545" : "#28a745", marginBottom: "15px", borderRadius: "4px" }}>
+                        {resetMsg.text}
+                    </div>
+                )}
+                <button
+                    onClick={handleRequestPasswordReset}
+                    disabled={resetLoading}
+                    style={{ padding: "10px 20px", background: "#dc3545", color: "white", border: "none", borderRadius: "4px", cursor: resetLoading ? "not-allowed" : "pointer", fontWeight: "bold", opacity: resetLoading ? 0.7 : 1 }}
+                >
+                    {resetLoading ? "Submitting..." : "Request Password Reset from Admin"}
+                </button>
+            </div>
         </div>
     );
 };

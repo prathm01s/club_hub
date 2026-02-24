@@ -2,7 +2,7 @@ import { useState, useEffect, useContext, useCallback } from "react";
 import AuthContext from "../context/AuthContext";
 
 const ProfilePage = () => {
-    const { authTokens, user } = useContext(AuthContext);
+    const { authTokens } = useContext(AuthContext);
 
     // Profile State
     const [profileData, setProfileData] = useState({
@@ -207,7 +207,7 @@ const ProfilePage = () => {
                         {profileMsg.text}
                     </div>
                 )}
-                
+
                 <form onSubmit={submitProfileUpdate} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
                     <div>
                         <label>First Name</label>
@@ -224,12 +224,12 @@ const ProfilePage = () => {
                     <div>
                         <label>College / Organization Name</label>
                         {/* If they are IIIT, keep it disabled since it's inferred. If not, let them edit it. */}
-                        <input 
-                            type="text" 
-                            name="collegeName" 
-                            value={profileData.collegeName} 
-                            onChange={handleProfileChange} 
-                            style={profileData.isIIIT ? {...inputStyle, background: "#e9ecef"} : inputStyle} 
+                        <input
+                            type="text"
+                            name="collegeName"
+                            value={profileData.collegeName}
+                            onChange={handleProfileChange}
+                            style={profileData.isIIIT ? { ...inputStyle, background: "#e9ecef" } : inputStyle}
                             readOnly={profileData.isIIIT}
                         />
                     </div>
@@ -237,7 +237,7 @@ const ProfilePage = () => {
                         <label>Areas of Interest (Comma separated, e.g., Coding, Music, Art)</label>
                         <input type="text" name="interests" value={profileData.interests} onChange={handleProfileChange} style={inputStyle} placeholder="Robotics, Web Dev, Finance..." />
                     </div>
-                    
+
                     <button type="submit" style={{ gridColumn: "span 2", padding: "10px", background: "#007bff", color: "white", border: "none", cursor: "pointer", borderRadius: "4px" }}>
                         Save Profile Changes
                     </button>
@@ -305,7 +305,7 @@ const ProfilePage = () => {
                     <input type="password" name="currentPassword" value={passwordData.currentPassword} onChange={handlePwdChange} placeholder="Current Password" required style={inputStyle} />
                     <input type="password" name="newPassword" value={passwordData.newPassword} onChange={handlePwdChange} placeholder="New Password" required style={inputStyle} />
                     <input type="password" name="confirmPassword" value={passwordData.confirmPassword} onChange={handlePwdChange} placeholder="Confirm New Password" required style={inputStyle} />
-                    
+
                     <button type="submit" style={{ padding: "10px", background: "#dc3545", color: "white", border: "none", cursor: "pointer", borderRadius: "4px", marginTop: "10px" }}>
                         Update Password
                     </button>

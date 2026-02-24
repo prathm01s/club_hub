@@ -1,13 +1,19 @@
-import { useState, useEffect, useContext, useCallback } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import AuthContext from "../context/AuthContext";
 import { Link } from "react-router-dom";
 
 const BrowseEventsPage = () => {
     const { authTokens, user } = useContext(AuthContext);
+    const authTokensRef = useRef(authTokens);
+    useEffect(() => { authTokensRef.current = authTokens; }, [authTokens]);
+
     const [events, setEvents] = useState([]);
-    
-    // Separate search input state so we don't fetch on every single keystroke
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    // Separate search input state so we can debounce it
     const [searchInput, setSearchInput] = useState("");
+    const debounceTimer = useRef(null);
 
     // The active filters that actually trigger the API call
     const [filters, setFilters] = useState({
@@ -20,41 +26,56 @@ const BrowseEventsPage = () => {
         endDate: ""
     });
 
-    // Build the URL and fetch data
-    const fetchEvents = useCallback(async () => {
-        try {
-            // Use the standard URL object to safely build query strings
-            let url = new URL("http://localhost:5000/api/events");
-            
-            if (filters.search) url.searchParams.append("search", filters.search);
-            if (filters.type) url.searchParams.append("type", filters.type);
-            if (filters.eligibility) url.searchParams.append("eligibility", filters.eligibility);
-            if (filters.trending) url.searchParams.append("trending", "true");
-            if (filters.followed) url.searchParams.append("followed", "true");
-            if (filters.startDate) url.searchParams.append("startDate", filters.startDate);
-            if (filters.endDate) url.searchParams.append("endDate", filters.endDate);
+    // Auto-search with 400ms debounce as user types
+    const handleSearchInputChange = (e) => {
+        const val = e.target.value;
+        setSearchInput(val);
+        clearTimeout(debounceTimer.current);
+        debounceTimer.current = setTimeout(() => {
+            setFilters(prev => ({ ...prev, search: val }));
+        }, 400);
+    };
 
-            // Set up headers (attach token if the user is logged in for personalized sorting)
-            const headers = { "Content-Type": "application/json" };
-            if (authTokens) {
-                headers["x-auth-token"] = authTokens.token;
-            }
-
-            const response = await fetch(url, { method: "GET", headers });
-            const data = await response.json();
-
-            if (response.ok) {
-                setEvents(data);
-            }
-        } catch (err) {
-            console.error("Failed to fetch events:", err);
-        }
-    }, [filters, authTokens]);
-
-    // Trigger fetch whenever filters change
+    // Fetch whenever filters change — authTokens accessed via ref to avoid re-fetch loops
     useEffect(() => {
-        fetchEvents();
-    }, [fetchEvents]);
+        let cancelled = false;
+        const doFetch = async () => {
+            setLoading(true);
+            setError("");
+            try {
+                const url = new URL("http://localhost:5000/api/events");
+                url.searchParams.set("status", "all");
+                if (filters.search)      url.searchParams.set("search", filters.search);
+                if (filters.type)        url.searchParams.set("type", filters.type);
+                if (filters.eligibility) url.searchParams.set("eligibility", filters.eligibility);
+                if (filters.trending)    url.searchParams.set("trending", "true");
+                if (filters.followed)    url.searchParams.set("followed", "true");
+                if (filters.startDate)   url.searchParams.set("startDate", filters.startDate);
+                if (filters.endDate)     url.searchParams.set("endDate", filters.endDate);
+
+                const headers = { "Content-Type": "application/json" };
+                const token = authTokensRef.current?.token;
+                if (token) headers["x-auth-token"] = token;
+
+                const res = await fetch(url.toString(), { headers });
+                const data = await res.json();
+
+                if (cancelled) return;
+                if (!res.ok) {
+                    setError(data.msg || `Error ${res.status}`);
+                    setEvents([]);
+                } else {
+                    setEvents(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                if (!cancelled) setError("Network error: " + err.message);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        doFetch();
+        return () => { cancelled = true; };
+    }, [filters]);
 
     // Handlers
     const handleSearchSubmit = (e) => {
@@ -69,36 +90,36 @@ const BrowseEventsPage = () => {
 
     return (
         <div style={{ padding: "20px", maxWidth: "1200px", margin: "auto" }}>
-            <h1>Browse Events</h1>
+            <h1 style={{ margin: "0 0 6px 0" }}>Browse Events</h1>
+            <p style={{ color: "gray", marginBottom: "20px" }}>Discover events, filter by type, eligibility, date, or your followed clubs.</p>
 
             <div style={{ display: "flex", gap: "20px", alignItems: "flex-start" }}>
                 
-                {/* LEFT SIDEBAR: Filters (Section 9.3) */}
-                <div style={{ width: "250px", background: "#f4f4f4", padding: "20px", borderRadius: "8px", flexShrink: 0 }}>
-                    <h3>Filters</h3>
+                {/* LEFT SIDEBAR: Filters */}
+                <div style={{ width: "260px", background: "#f4f4f4", padding: "20px", borderRadius: "8px", flexShrink: 0 }}>
+                    <h3 style={{ margin: "0 0 16px" }}>Filters</h3>
                     
-                    {/* Search Bar */}
+                    {/* Search Bar with debounced auto-search */}
                     <form onSubmit={handleSearchSubmit} style={{ marginBottom: "20px" }}>
                         <input 
                             type="text" 
-                            placeholder="Search events/clubs..." 
+                            placeholder="Search events or organizers..."
                             value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            style={{ width: "100%", padding: "8px", marginBottom: "5px", boxSizing: "border-box" }}
+                            onChange={handleSearchInputChange}
+                            style={{ width: "100%", padding: "8px", marginBottom: "5px", boxSizing: "border-box", borderRadius: "4px", border: "1px solid #ccc" }}
                         />
-                        <button type="submit" style={{ width: "100%", padding: "8px", cursor: "pointer" }}>Search</button>
-                    </form>
+                        <button type="submit" style={{ width: "100%", padding: "8px", cursor: "pointer", borderRadius: "4px", border: "none", background: "#007bff", color: "white" }}>Search</button>
 
                     {/* Checkbox Filters */}
                     <div style={{ marginBottom: "15px" }}>
                         <label style={{ display: "block", marginBottom: "5px" }}>
                             <input type="checkbox" name="trending" checked={filters.trending} onChange={handleFilterChange} /> 
-                            🔥 Trending (Top 5/24h)
+                            Trending (Top 5/24h)
                         </label>
                         {user && (
                             <label style={{ display: "block", marginBottom: "5px" }}>
                                 <input type="checkbox" name="followed" checked={filters.followed} onChange={handleFilterChange} /> 
-                                ⭐️ Followed Clubs
+                                Followed Clubs
                             </label>
                         )}
                     </div>
@@ -140,35 +161,65 @@ const BrowseEventsPage = () => {
                     >
                         Clear All Filters
                     </button>
+                    </form>
                 </div>
 
                 {/* RIGHT SIDE: Event Grid */}
                 <div style={{ flex: 1 }}>
+                    {loading && <p style={{ color: "gray" }}>Loading events...</p>}
+                    {error && <p style={{ color: "red", fontWeight: "bold" }}>Error: {error}</p>}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px" }}>
-                        {events.length > 0 ? (
-                            events.map(event => (
-                                <div key={event._id} style={{ border: "1px solid #ddd", padding: "15px", borderRadius: "8px", background: "white", display: "flex", flexDirection: "column" }}>
-                                    <h3 style={{ margin: "0 0 10px 0" }}>{event.name}</h3>
+                        {!loading && !error && events.length === 0 && (
+                            <p style={{ gridColumn: "1/-1", color: "gray" }}>No events found matching your criteria.</p>
+                        )}
+                        {events.map(event => {
+                            const isMerch = event.eventType === 'merchandise';
+                            const isIIIT = event.eligibility === 'iiit-only';
+                            const slotsLeft = isMerch ? event.stock : (event.registrationLimit - event.registrationCount);
+                            const isFull = slotsLeft <= 0;
+                            const organizerName = event.organizer?.organizerName ||
+                                `${event.organizer?.firstName || ''} ${event.organizer?.lastName || ''}`.trim();
+
+                            return (
+                                <div key={event._id} style={{ border: "1px solid #ddd", padding: "16px", borderRadius: "8px", background: "white", display: "flex", flexDirection: "column", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                                     
-                                    {/* Personalization Indicator */}
-                                    {event.score > 0 && <span style={{ fontSize: "0.8rem", color: "green", marginBottom: "10px" }}>✓ Recommended for you</span>}
-                                    
-                                    <p style={{ margin: "5px 0" }}><strong>Type:</strong> <span style={{ textTransform: "capitalize" }}>{event.eventType}</span></p>
-                                    <p style={{ margin: "5px 0" }}><strong>Organizer:</strong> {event.organizer?.organizerName || event.organizer?.firstName}</p>
-                                    <p style={{ margin: "5px 0" }}><strong>Date:</strong> {new Date(event.startDate).toLocaleDateString()}</p>
-                                    
-                                    <div style={{ marginTop: "auto", paddingTop: "15px" }}>
-                                        <Link to={`/event/${event._id}`}>
-                                            <button style={{ width: "100%", padding: "10px", background: "#007bff", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>
-                                                View Details
+                                    {/* Event name + personalization */}
+                                    <h3 style={{ margin: "0 0 6px 0", fontSize: "1rem" }}>{event.name}</h3>
+                                    {event.score > 0 && <span style={{ fontSize: "0.75rem", color: "#28a745", marginBottom: "8px" }}>Recommended for you</span>}
+
+                                    {/* Type + Eligibility badges */}
+                                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "10px" }}>
+                                        <span style={cardBadge}>{isMerch ? 'Merch' : 'Normal'}</span>
+                                        <span style={{ ...cardBadge, background: isIIIT ? '#fff3cd' : '#d4edda', color: isIIIT ? '#856404' : '#155724' }}>
+                                            {isIIIT ? 'IIIT Only' : 'Open'}
+                                        </span>
+                                        {event.status === 'upcoming' && <span style={{ ...cardBadge, background: '#e2d9f3', color: '#6f42c1' }}>Upcoming</span>}
+                                        {event.status === 'ongoing' && <span style={{ ...cardBadge, background: '#cce5ff', color: '#004085' }}>Ongoing</span>}
+                                        {event.status === 'completed' && <span style={{ ...cardBadge, background: '#e2e3e5', color: '#383d41' }}>Completed</span>}
+                                    </div>
+
+                                    {/* Details */}
+                                    <p style={cardRow}><strong>By:</strong> {organizerName}</p>
+                                    <p style={cardRow}><strong>Date:</strong> {new Date(event.startDate).toLocaleDateString()}</p>
+                                    <p style={cardRow}>
+                                        <strong>Fee:</strong> {event.fee > 0 ? `₹${event.fee}` : <span style={{ color: '#28a745' }}>Free</span>}
+                                    </p>
+                                    <p style={{ ...cardRow, color: isFull ? '#dc3545' : slotsLeft <= 10 ? '#856404' : '#555', fontWeight: isFull || slotsLeft <= 10 ? 'bold' : 'normal' }}>
+                                        {isMerch
+                                            ? (isFull ? 'Out of Stock' : `${slotsLeft} in stock`)
+                                            : (isFull ? 'Fully Booked' : `${slotsLeft} slot${slotsLeft !== 1 ? 's' : ''} left`)}
+                                    </p>
+
+                                    <div style={{ marginTop: "auto", paddingTop: "14px" }}>
+                                        <Link to={`/event/${event._id}`} style={{ display: "block" }}>
+                                            <button style={{ width: "100%", padding: "10px", background: isFull ? "#6c757d" : "#007bff", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "bold" }}>
+                                                {isFull ? 'View Details' : (isMerch ? 'Buy Now' : 'Register')}
                                             </button>
                                         </Link>
                                     </div>
                                 </div>
-                            ))
-                        ) : (
-                            <p>No events found matching your criteria.</p>
-                        )}
+                            );
+                        })}
                     </div>
                 </div>
                 
@@ -176,5 +227,8 @@ const BrowseEventsPage = () => {
         </div>
     );
 };
+
+const cardBadge = { background: "#e9ecef", padding: "3px 8px", borderRadius: "10px", fontSize: "0.75rem", fontWeight: "bold" };
+const cardRow = { margin: "4px 0", fontSize: "0.9rem" };
 
 export default BrowseEventsPage;

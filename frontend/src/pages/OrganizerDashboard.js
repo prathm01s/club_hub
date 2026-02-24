@@ -10,7 +10,15 @@ const OrganizerDashboard = () => {
     const initialTab = new URLSearchParams(location.search).get("tab") || "published";
     const [events, setEvents] = useState([]);
     const [activeTab, setActiveTab] = useState(initialTab);
-    const [closedAnalytics, setClosedAnalytics] = useState([]);
+    const [completedAnalytics, setCompletedAnalytics] = useState([]);
+
+    // Sync tab with URL query param (e.g. Navbar "Ongoing Events" link)
+    useEffect(() => {
+        const tabFromUrl = new URLSearchParams(location.search).get("tab");
+        if (tabFromUrl && tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl);
+        }
+    }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
     // Use useCallback so we can safely include it in useEffect's dependency array
     const fetchMyEvents = useCallback(async () => {
         try {
@@ -32,10 +40,10 @@ const OrganizerDashboard = () => {
         }
     }, [activeTab, authTokens]);
 
-    const fetchClosedEventAnalytics = useCallback(async () => {
+    const fetchCompletedEventAnalytics = useCallback(async () => {
         try {
             const response = await fetch(
-                "http://localhost:5000/api/events/my-closed-event-analytics",
+                "http://localhost:5000/api/events/my-completed-event-analytics",
                 {
                     method: "GET",
                     headers: {
@@ -46,7 +54,7 @@ const OrganizerDashboard = () => {
             );
             const data = await response.json();
             if (response.ok) {
-                setClosedAnalytics(data);
+                setCompletedAnalytics(data);
             }
         } catch (err) {
             console.error("Failed to fetch analytics.", err);
@@ -54,8 +62,8 @@ const OrganizerDashboard = () => {
     }, [authTokens]);
     useEffect(() => {
         fetchMyEvents();
-        fetchClosedEventAnalytics();
-    }, [fetchMyEvents, fetchClosedEventAnalytics]);
+        fetchCompletedEventAnalytics();
+    }, [fetchMyEvents, fetchCompletedEventAnalytics]);
 
     return (
         <div style={{ padding: "20px", maxWidth: "1200px", margin: "auto" }}>
@@ -71,7 +79,7 @@ const OrganizerDashboard = () => {
 
             {/* STATUS TABS */}
             <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "2px solid #ccc", paddingBottom: "10px" }}>
-                {['draft', 'published', 'ongoing', 'closed'].map(status => (
+                {['draft', 'upcoming', 'ongoing', 'completed'].map(status => (
                     <button 
                         key={status}
                         onClick={() => setActiveTab(status)}
@@ -97,8 +105,8 @@ const OrganizerDashboard = () => {
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
                                 <h3 style={{ margin: 0 }}>{event.name}</h3>
                                 <span style={{
-                                    background: event.status === 'published' ? '#cce5ff' : event.status === 'ongoing' ? '#d4edda' : event.status === 'closed' ? '#f8d7da' : '#e2e3e5',
-                                    color: event.status === 'published' ? '#004085' : event.status === 'ongoing' ? '#155724' : event.status === 'closed' ? '#721c24' : '#383d41',
+                                    background: event.status === 'upcoming' ? '#e2d9f3' : event.status === 'ongoing' ? '#d4edda' : event.status === 'completed' ? '#f8d7da' : '#e2e3e5',
+                                    color: event.status === 'upcoming' ? '#6f42c1' : event.status === 'ongoing' ? '#155724' : event.status === 'completed' ? '#721c24' : '#383d41',
                                     padding: "3px 10px", borderRadius: "12px", fontSize: "0.8rem", fontWeight: "bold", textTransform: "capitalize", whiteSpace: "nowrap"
                                 }}>{event.status}</span>
                             </div>
@@ -111,7 +119,7 @@ const OrganizerDashboard = () => {
                                     <button style={{ padding: "5px 10px", cursor: "pointer" }}>Manage</button>
                                 </Link>
                                 
-                                {(event.status === 'draft' || event.status === 'published') && (
+                                {(event.status === 'draft' || event.status === 'upcoming') && (
                                     <Link to={`/organizer/edit-event/${event._id}`}>
                                         <button style={{ padding: "5px 10px", cursor: "pointer", background: "#ffc107", border: "none", borderRadius: "3px" }}>Edit Event</button>
                                     </Link>
@@ -124,7 +132,7 @@ const OrganizerDashboard = () => {
 
             <hr style={{ margin: "40px 0" }} />
             <h2>Completed Events: Analytics</h2>
-            {closedAnalytics.length === 0 ? (
+            {completedAnalytics.length === 0 ? (
                 <p>No completed events yet.</p>
             ) : (
                 <div 
@@ -134,7 +142,7 @@ const OrganizerDashboard = () => {
                         gap: '20px',
                         marginTop: '20px'
                 }}>
-                    {closedAnalytics.map(event => {
+                    {completedAnalytics.map(event => {
                         const capacity = event.eventType === 'merchandise' ? event.stock : event.registrationLimit;
                         const fillRate = capacity ? Math.round((event.ticketsSold / capacity) * 100) : 0;
                         const attendanceRate = event.ticketsSold ? Math.round((event.attendanceCount / event.ticketsSold) * 100) : 0;

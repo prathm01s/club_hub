@@ -11,7 +11,8 @@ const CreateEventPage = () => {
     const [eventDetails, setEventDetails] = useState({
         name: "", description: "", eventType: "normal", eligibility: "all",
         startDate: "", endDate: "", registrationDeadline: "",
-        registrationLimit: "", fee: 0, tags: "", stock: "", maxItemsPerUser: 1
+        registrationLimit: "", fee: 0, tags: "", stock: "", maxItemsPerUser: 1,
+        isTeamEvent: false, minTeamSize: 1, maxTeamSize: 4
     });
 
     // 2. Dynamic Form Builder State (Array of question objects)
@@ -19,7 +20,8 @@ const CreateEventPage = () => {
 
     // --- Core Details Handlers ---
     const handleDetailChange = (e) => {
-        setEventDetails({ ...eventDetails, [e.target.name]: e.target.value });
+        const value = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+        setEventDetails({ ...eventDetails, [e.target.name]: value });
     };
 
     // --- Dynamic Form Builder Handlers ---
@@ -101,6 +103,25 @@ const CreateEventPage = () => {
                         <option value="iiit-only">IIIT Students Only</option>
                     </select>
                     <input type="number" name="registrationLimit" placeholder="Max Capacity" onChange={handleDetailChange} required />
+                </div>
+
+                <div style={{ display: "flex", gap: "15px", marginTop: "15px", alignItems: "center" }}>
+                    <label style={{ fontWeight: "bold", display: "flex", alignItems: "center", gap: "5px" }}>
+                        <input 
+                            type="checkbox" 
+                            name="isTeamEvent" 
+                            checked={eventDetails.isTeamEvent} 
+                            onChange={handleDetailChange} 
+                        />
+                        Is this a Team Event / Hackathon?
+                    </label>
+
+                    {eventDetails.isTeamEvent && (
+                        <>
+                            <input type="number" name="minTeamSize" placeholder="Min Team Size" value={eventDetails.minTeamSize} onChange={handleDetailChange} required style={{ width: "120px" }} />
+                            <input type="number" name="maxTeamSize" placeholder="Max Team Size" value={eventDetails.maxTeamSize} onChange={handleDetailChange} required style={{ width: "120px" }} />
+                        </>
+                    )}
                 </div>
                 
                 <textarea name="description" placeholder="Event Description..." onChange={handleDetailChange} style={{ width: "100%", marginTop: "15px", height: "80px", padding: "8px", boxSizing: "border-box" }} required />

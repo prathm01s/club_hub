@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const auth = require('../middleware/auth');
 const User = require('../models/User');
+const PasswordResetRequest = require('../models/PasswordResetRequest');
 
 // @route   PUT /api/users/preferences
 // @desc    Update user interests and following list
@@ -13,7 +15,14 @@ router.put('/preferences', auth, async (req, res) => {
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
         if (interests) user.interests = interests;
-        if (following) user.following = following;
+        if (following !== undefined) {
+            // Validate: only store IDs that are actual active organizer accounts
+            const validOrgs = await User.find({ _id: { $in: following }, role: 'organizer', isActive: true }).select('_id');
+            user.following = validOrgs.map(o => o._id);
+        }
+        if (req.body.onboardingComplete !== undefined) {
+            user.onboardingComplete = req.body.onboardingComplete;
+        }
         await user.save();
         res.json({ msg: 'Preferences updated successfully', user });
     } catch (err) {
@@ -42,7 +51,7 @@ router.put('/profile', auth, async (req, res) => {
     try {
         const { firstName, lastName, contactNumber, collegeName, interests, following } = req.body;
         const user = await User.findById(req.user.id);
-        
+
         if (!user) return res.status(404).json({ msg: 'User not found' });
 
         // Update fields if they were provided in the request
@@ -51,8 +60,12 @@ router.put('/profile', auth, async (req, res) => {
         if (contactNumber) user.contactNumber = contactNumber;
         if (collegeName) user.collegeName = collegeName;
         if (interests) user.interests = interests;
-        if (following) user.following = following;
-        
+        if (following !== undefined) {
+            // Validate: only store IDs that are actual active organizer accounts
+            const validOrgs = await User.find({ _id: { $in: following }, role: 'organizer', isActive: true }).select('_id');
+            user.following = validOrgs.map(o => o._id);
+        }
+
         // Note: Email and isIIIT (Participant Type) are deliberately NOT updated here for security.
 
         await user.save();
@@ -69,17 +82,25 @@ router.put('/profile', auth, async (req, res) => {
 router.put('/change-password', auth, async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
+
+        // Input validation
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ msg: 'Current password and new password are required.' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ msg: 'New password must be at least 6 characters.' });
+        }
+
         const user = await User.findById(req.user.id);
-        
+
         // 1. Verify current password
-        const bcrypt = require('bcryptjs'); // Ensure bcrypt is imported at top of file
         const isMatch = await bcrypt.compare(currentPassword, user.password);
         if (!isMatch) {
             return res.status(400).json({ msg: 'Incorrect current password' });
         }
 
         // 2. Hash and save new password
-        const salt = await bcrypt.genSalt(10);
+        const salt = await bcrypt.genSalt(10); // bcrypt imported at top of file
         user.password = await bcrypt.hash(newPassword, salt);
         await user.save();
 
@@ -91,13 +112,12 @@ router.put('/change-password', auth, async (req, res) => {
 });
 
 // @route   GET /api/users/organizers
-// @desc    Get a list of all approved organizers
+// @desc    Get a list of all approved/active organizers
 // @access  Public
 router.get('/organizers', async (req, res) => {
     try {
-        // Fetch users with the organizer role, excluding passwords
-        const organizers = await User.find({ role: 'organizer' })
-            .select('-password -email -contactNumber'); // Hide sensitive info
+        const organizers = await User.find({ role: 'organizer', isActive: true })
+            .select('-password -contactNumber');
         res.json(organizers);
     } catch (err) {
         console.error(err.message);
@@ -111,8 +131,8 @@ router.get('/organizers', async (req, res) => {
 router.get('/organizers/:id', async (req, res) => {
     try {
         const organizer = await User.findOne({ _id: req.params.id, role: 'organizer' })
-            .select('-password -email'); 
-            
+            .select('-password -contactNumber');
+
         if (!organizer) {
             return res.status(404).json({ msg: 'Organizer not found' });
         }
@@ -131,7 +151,7 @@ router.put('/organizer-profile', auth, async (req, res) => {
     try {
         const { organizerName, organizerCategory, description, contactEmail, contactNumber, discordWebhook } = req.body;
         const user = await User.findById(req.user.id);
-        
+
         if (!user || user.role !== 'organizer') {
             return res.status(403).json({ msg: 'Access Denied' });
         }
@@ -146,6 +166,39 @@ router.put('/organizer-profile', auth, async (req, res) => {
 
         await user.save();
         res.json({ msg: 'Organizer profile updated successfully', user });
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).send('Server Error');
+    }
+});
+
+// @route   POST /api/users/request-password-reset
+// @desc    Submit a password reset request to admin
+// @access  Private (any logged-in user)
+router.post('/request-password-reset', auth, async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('-password');
+        if (!user) return res.status(404).json({ msg: 'User not found' });
+
+        // Prevent duplicate pending requests
+        const existing = await PasswordResetRequest.findOne({ user: user._id, status: 'pending' });
+        if (existing) {
+            return res.status(400).json({ msg: 'You already have a pending password reset request.' });
+        }
+
+        const displayName = user.role === 'organizer'
+            ? user.organizerName
+            : `${user.firstName || ''} ${user.lastName || ''}`.trim();
+
+        const request = new PasswordResetRequest({
+            user: user._id,
+            userEmail: user.email,
+            userName: displayName,
+            userRole: user.role
+        });
+        await request.save();
+
+        res.json({ msg: 'Password reset request submitted. An admin will process it shortly.' });
     } catch (err) {
         console.error(err.message);
         res.status(500).send('Server Error');
