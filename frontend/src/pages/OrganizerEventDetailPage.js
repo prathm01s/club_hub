@@ -28,17 +28,30 @@ const OrganizerEventDetailPage = () => {
     const scannerRef = useRef(null);
 
     useEffect(() => {
-        if (showScanner) {
-            scannerRef.current = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true }, false);
-            scannerRef.current.render(onScanSuccess, onScanFailure);
-        } else {
-            if (scannerRef.current) {
-                scannerRef.current.clear().catch(error => console.error("Failed to clear scanner", error));
-                scannerRef.current = null;
-            }
-        }
+        if (!showScanner) return;
+
+        let html5QrcodeScanner = null;
+        let isMounted = true;
+
+        // Delay initialization to bypass React 18 Strict Mode double-mount race conditions
+        // which physically corrupt the native File Upload event listeners in html5-qrcode.
+        const timer = setTimeout(() => {
+            if (!isMounted) return;
+            html5QrcodeScanner = new Html5QrcodeScanner(
+                "qr-reader",
+                { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
+                false
+            );
+            html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+            scannerRef.current = html5QrcodeScanner;
+        }, 150);
+
         return () => {
-            if (scannerRef.current) scannerRef.current.clear();
+            isMounted = false;
+            clearTimeout(timer);
+            if (html5QrcodeScanner) {
+                html5QrcodeScanner.clear().catch(error => console.error("Failed to clear scanner", error));
+            }
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [showScanner]);
