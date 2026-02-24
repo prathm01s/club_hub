@@ -19,6 +19,7 @@ const EventDetailsPage = () => {
     const [quantity, setQuantity] = useState(1);
     const [regError, setRegError] = useState("");
     const [successMsg, setSuccessMsg] = useState("");
+    const [myRegistration, setMyRegistration] = useState(null); // track existing registration
 
     // Team Registration State
     const [myTeam, setMyTeam] = useState(undefined); // undefined=loading, null=none, obj=existing team
@@ -62,6 +63,22 @@ const EventDetailsPage = () => {
                         }
                     } else {
                         setMyTeam(null);
+                    }
+
+                    // Check if user already has a registration for this event
+                    if (authTokens) {
+                        try {
+                            const regRes = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/my-events`, {
+                                headers: { "x-auth-token": authTokens.token }
+                            });
+                            if (regRes.ok) {
+                                const regs = await regRes.json();
+                                const activeReg = regs.find(r => r.event && r.event._id === id && r.status !== 'cancelled');
+                                setMyRegistration(activeReg || null);
+                            }
+                        } catch {
+                            // ignore
+                        }
                     }
                 } else {
                     setError(data.msg || "Event not found");
@@ -353,13 +370,18 @@ const EventDetailsPage = () => {
                         <p style={{ color: "red", fontWeight: "bold" }}>This event is restricted to IIIT students only.</p>
                     ) : (
                         <>
-                            {!showForm && !event.isTeamEvent && (
+                            {!showForm && !event.isTeamEvent && !myRegistration && (
                                 <button
                                     onClick={() => setShowForm(true)}
                                     style={{ padding: "15px 30px", background: "#007bff", color: "white", border: "none", borderRadius: "5px", fontSize: "1.2rem", cursor: "pointer" }}
                                 >
                                     {event.eventType === 'merchandise' ? 'Buy Now' : 'Register Now'}
                                 </button>
+                            )}
+                            {!showForm && !event.isTeamEvent && myRegistration && (
+                                <div style={{ padding: "12px 20px", background: "#d4edda", color: "#155724", borderRadius: "6px", fontWeight: "bold" }}>
+                                    ✅ You are already registered for this event. (Ticket: {myRegistration.ticketId?.slice(0, 8)}...)
+                                </div>
                             )}
 
                             {/* ── TEAM EVENT REGISTRATION ── */}

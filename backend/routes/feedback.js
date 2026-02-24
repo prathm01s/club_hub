@@ -37,11 +37,17 @@ router.post('/:eventId', auth, async (req, res) => {
         const event = await Event.findById(req.params.eventId);
         if (!event) return res.status(404).json({ msg: 'Event not found.' });
 
-        // Verify user attended this event
+        // Verify user attended/registered for this event
+        // For completed events, allow feedback from 'registered' users too
+        // (e.g. hackathon team members who weren't individually scanned)
+        const allowedStatuses = event.status === 'completed'
+            ? ['attended', 'registered']
+            : ['attended'];
+
         const registration = await Registration.findOne({
             event: req.params.eventId,
             user: req.user.id,
-            status: 'attended'
+            status: { $in: allowedStatuses }
         });
 
         if (!registration) {
