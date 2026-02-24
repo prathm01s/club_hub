@@ -31,7 +31,7 @@ const Dashboard = () => {
 
     const fetchMyEvents = useCallback(async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/my-events", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/registrations/my-events`, {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -69,7 +69,7 @@ const Dashboard = () => {
 
     const fetchMyTeams = useCallback(async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/my-teams", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/my-teams`, {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await response.json();
@@ -81,7 +81,7 @@ const Dashboard = () => {
 
     const fetchMyInvites = useCallback(async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/my-invites", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/my-invites`, {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await response.json();

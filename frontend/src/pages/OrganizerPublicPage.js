@@ -23,7 +23,7 @@ const OrganizerPublicPage = () => {
 
                 // Check if current participant follows this organizer
                 if (authTokens && user?.role === "participant") {
-                    const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
+                    const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile`, {
                         headers: { "x-auth-token": authTokens.token }
                     });
                     const profileData = await profileRes.json();
@@ -42,7 +42,7 @@ const OrganizerPublicPage = () => {
         setFollowLoading(true);
         try {
             // Get current following list
-            const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
+            const profileRes = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile`, {
                 headers: { "x-auth-token": authTokens.token }
             });
             const profileData = await profileRes.json();
@@ -52,7 +52,7 @@ const OrganizerPublicPage = () => {
                 ? followingIds.filter(fid => fid !== id)
                 : [...followingIds, id];
 
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ following: newFollowing })

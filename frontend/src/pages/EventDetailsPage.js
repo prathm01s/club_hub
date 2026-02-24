@@ -119,7 +119,7 @@ const EventDetailsPage = () => {
     const handleCreateTeam = async () => {
         setRegError("");
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/create", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/create`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({
@@ -195,7 +195,7 @@ const EventDetailsPage = () => {
     const handleJoinTeam = async () => {
         setRegError("");
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/join", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/teams/join`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "x-auth-token": authTokens.token },
                 body: JSON.stringify({ inviteCode: inviteCode.trim().toUpperCase(), responses: teamFormResponses })

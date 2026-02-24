@@ -63,7 +63,7 @@ const CreateEventPage = () => {
         const payload = { ...eventDetails, tags: tagsArray, formFields, status };
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/events`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

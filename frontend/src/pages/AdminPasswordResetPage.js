@@ -10,7 +10,7 @@ const AdminPasswordResetPage = () => {
 
     const fetchRequests = async () => {
         try {
-            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/password-reset-requests", {
+            const res = await fetch(`${process.env.REACT_APP_API_URL}/api/admin/password-reset-requests`, {
                 headers: { "x-auth-token": authTokens.token }
             });
             const data = await res.json();

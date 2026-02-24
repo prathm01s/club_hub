@@ -43,7 +43,7 @@ const OrganizerDashboard = () => {
     const fetchCompletedEventAnalytics = useCallback(async () => {
         try {
             const response = await fetch(
-                `${process.env.REACT_APP_API_URL}/api/events/my-completed-event-analytics",
+                `${process.env.REACT_APP_API_URL}/api/events/my-completed-event-analytics`,
                 {
                     method: "GET",
                     headers: {

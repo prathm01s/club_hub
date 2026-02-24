@@ -34,7 +34,7 @@ const ProfilePage = () => {
     // 1. Fetch current profile data and organizers list on load
     const fetchProfile = useCallback(async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile`, {
                 method: "GET",
                 headers: { "x-auth-token": authTokens.token }
             });
@@ -59,7 +59,7 @@ const ProfilePage = () => {
 
     const fetchOrganizers = useCallback(async () => {
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/organizers");
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/organizers`);
             const data = await response.json();
             if (response.ok) setAllOrganizers(data);
         } catch (err) {
@@ -84,7 +84,7 @@ const ProfilePage = () => {
     const saveFollowedClubs = async () => {
         setFollowMsg({ type: "", text: "" });
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -119,7 +119,7 @@ const ProfilePage = () => {
             .filter(item => item !== "");
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/profile`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
@@ -163,7 +163,7 @@ const ProfilePage = () => {
         }
 
         try {
-            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/change-password", {
+            const response = await fetch(`${process.env.REACT_APP_API_URL}/api/users/change-password`, {
                 method: "PUT",
                 headers: {
                     "Content-Type": "application/json",
