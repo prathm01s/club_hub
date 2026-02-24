@@ -19,9 +19,9 @@ async function syncEventStatuses() {
         const legacyFilter = { $or: [{ status: 'published' }, { status: null }] };
         const legacy = await Event.find(legacyFilter).select('startDate endDate status');
         for (const e of legacy) {
-            if (new Date(e.endDate) < now)        e.status = 'completed';
+            if (new Date(e.endDate) < now) e.status = 'completed';
             else if (new Date(e.startDate) <= now) e.status = 'ongoing';
-            else                                   e.status = 'upcoming';
+            else e.status = 'upcoming';
             await e.save({ validateBeforeSave: false });
         }
         // upcoming → ongoing
@@ -45,7 +45,7 @@ router.post('/', auth, async (req, res) => {
     try {
         const user = await User.findById(req.user.id);
         if (user.role != 'organizer') {
-            return res.status(403).json({ msg : "Access Denied. Organizers Only."});
+            return res.status(403).json({ msg: "Access Denied. Organizers Only." });
         }
         const { startDate, endDate, registrationDeadline, eventType, stock, registrationLimit } = req.body;
         // --- ROBUSTNESS UPGRADE: Timeline Validation ---
@@ -68,14 +68,45 @@ router.post('/', auth, async (req, res) => {
             return res.status(400).json({ msg: "Registration limit must be greater than 0." });
         }
 
+        // 4. Derive correct target status if user clicked "Publish Event"
+        let targetStatus = req.body.status || 'draft';
+        if (targetStatus === 'published') {
+            const now = new Date();
+            if (start > now) {
+                targetStatus = 'upcoming';
+            } else if (end > now) {
+                targetStatus = 'ongoing';
+            } else {
+                targetStatus = 'completed';
+            }
+        }
+
         const newEvent = new Event({
             ...req.body,
             organizer: req.user.id,
             maxItemsPerUser: req.body.eventType === 'normal' ? 1 : req.body.maxItemsPerUser,
-            status: req.body.status || 'draft'
+            status: targetStatus
         });
 
         const event = await newEvent.save();
+
+        // 5. Fire Discord webhook when an event is published on creation
+        if (targetStatus === 'upcoming' || targetStatus === 'ongoing') {
+            try {
+                if (user && user.discordWebhook) {
+                    const axios = require('axios');
+                    const message = {
+                        content: `**New Event Published by ${user.organizerName}!**\n\n**${event.name}**\n*${event.description}*\n\n**Starts:** ${new Date(event.startDate).toLocaleString()}\n**Type:** ${event.eventType}\n\nRegister now on Felicity Event Manager!`
+                    };
+                    axios.post(user.discordWebhook, message).catch(err =>
+                        console.error("Discord Webhook failed:", err.message)
+                    );
+                }
+            } catch (webhookErr) {
+                console.error("Webhook error:", webhookErr.message);
+            }
+        }
+
         res.json(event);
     } catch (err) {
         console.error(err.message);
@@ -127,10 +158,10 @@ router.put('/:id/status', auth, async (req, res) => {
 
         // 5. Validate allowed transitions
         const allowed = {
-            draft:     ['upcoming', 'published', 'ongoing', 'completed'], // resolved above
-            upcoming:  ['ongoing', 'completed'],
+            draft: ['upcoming', 'published', 'ongoing', 'completed'], // resolved above
+            upcoming: ['ongoing', 'completed'],
             published: ['upcoming', 'ongoing', 'completed'],              // legacy
-            ongoing:   ['completed'],
+            ongoing: ['completed'],
             completed: []
         };
         if (!(allowed[event.status] || []).includes(targetStatus)) {
@@ -221,7 +252,7 @@ router.get('/', async (req, res) => {
                     { organizerName: { $regex: search, $options: 'i' } }
                 ]
             }).select('_id');
-            
+
             const organizerIds = matchingOrganizers.map(org => org._id);
             query.$or = [
                 { name: { $regex: search, $options: 'i' } },
@@ -233,7 +264,7 @@ router.get('/', async (req, res) => {
         let trendingEventIds = [];
         if (trending === 'true') {
             const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000); // Exactly 24 hours ago
-            
+
             // Database Magic: Group registrations from the last 24 hours by Event, count them, and get top 5
             const trendingData = await Registration.aggregate([
                 { $match: { createdAt: { $gte: yesterday } } }, // Only registrations since yesterday
@@ -253,12 +284,12 @@ router.get('/', async (req, res) => {
         const token = req.header('x-auth-token');
         let user = null;
         let followingIds = [];
-        
+
         if (token) {
             try {
                 const decoded = jwt.verify(token, process.env.JWT_SECRET);
                 user = await User.findById(decoded.user.id);
-                
+
                 if (user && user.role === 'participant') {
                     followingIds = user.following.map(id => id.toString());
                     if (followed === 'true') {
@@ -296,7 +327,7 @@ router.get('/', async (req, res) => {
             events = events.map(event => {
                 const eventObj = event.toObject();
                 let score = 0;
-                
+
                 if (event.organizer && followingIds.includes(event.organizer._id.toString())) {
                     score += 10;
                 }
@@ -326,16 +357,16 @@ router.get("/my-created-events", auth, organizer, async (req, res) => {
         await syncEventStatuses();
 
         const { status } = req.query;
-        
+
         // Always restrict to the logged-in organizer
         let query = { organizer: req.user.id };
-        
+
         // If they clicked a specific status tab on the frontend
         if (status) {
             query.status = status;
         }
 
-        const events = await Event.find(query).sort({ createdAt: -1});
+        const events = await Event.find(query).sort({ createdAt: -1 });
         res.json(events);
     } catch (err) {
         console.error(err.message);
@@ -431,14 +462,14 @@ router.get('/:id', async (req, res) => {
             .populate("organizer", "firstName lastName organizerName organizerCategory");
 
         if (!event) {
-            return res.status(404).json({ msg : "Event not found"});
+            return res.status(404).json({ msg: "Event not found" });
         }
         res.json(event);
-        
+
     } catch (err) {
         console.error(err.message);
         if (err.kind == "ObjectId") {
-            return res.status(404).json({ msg : "Event Not Found"});
+            return res.status(404).json({ msg: "Event Not Found" });
         }
         res.status(500).send("Server Error");
     }
@@ -499,25 +530,7 @@ router.put('/:id', auth, async (req, res) => {
 
             // All other fields are locked for published events.
 
-            const isNewlyPublished = false; // status changes go through /status endpoint
             await event.save();
-
-            // --- DISCORD WEBHOOK ---
-            if (isNewlyPublished) {
-                try {
-                    const organizerUser = await User.findById(req.user.id);
-                    if (organizerUser.discordWebhook) {
-                        const axios = require('axios'); // Note: ensure you run `npm install axios` in backend
-                        const message = {
-                            content: `**New Event Published by ${organizerUser.organizerName}!**\n\n**${event.name}**\n*${event.description}*\n\n**Starts:** ${new Date(event.startDate).toLocaleString()}\n**Type:** ${event.eventType}\n\nRegister now on Felicity Event Manager!`
-                        };
-                        // Fire and forget (we don't await so we don't slow down the user's API response)
-                        axios.post(organizerUser.discordWebhook, message).catch(err => console.error("Discord Webhook failed:", err.message));
-                    }
-                } catch (webhookErr) {
-                    console.error("Webhook processing error:", webhookErr.message);
-                }
-            }
 
             return res.json({ msg: "Event updated successfully", event });
         }

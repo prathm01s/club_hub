@@ -93,17 +93,29 @@ router.post("/create", auth, async (req, res) => {
                 return res.status(400).json({ msg: "Sorry, the event just became full." });
             }
 
-            const registration = await Registration.create({
-                event: event._id,
-                user: req.user.id,
-                team: newTeam._id,
-                ticketId: uuidv4(),
-                status: "registered",
-                paymentStatus: "completed",
-                quantity: 1,
-                teamName: teamName,
-                responses
-            });
+            let registration;
+            const existingReg = await Registration.findOne({ event: event._id, user: req.user.id });
+            if (existingReg && existingReg.status === "cancelled") {
+                existingReg.ticketId = uuidv4();
+                existingReg.status = "registered";
+                existingReg.team = newTeam._id;
+                existingReg.teamName = teamName;
+                existingReg.responses = responses;
+                await existingReg.save();
+                registration = existingReg;
+            } else {
+                registration = await Registration.create({
+                    event: event._id,
+                    user: req.user.id,
+                    team: newTeam._id,
+                    ticketId: uuidv4(),
+                    status: "registered",
+                    paymentStatus: "completed",
+                    quantity: 1,
+                    teamName: teamName,
+                    responses
+                });
+            }
 
             newTeam.status = "completed";
             await newTeam.save();
@@ -263,20 +275,34 @@ router.post("/join", auth, async (req, res) => {
                         : (mr.responses || {});
             });
 
-            // One Registration + unique ticket per member
-            const registrationDocs = team.members.map(memberId => ({
-                event: event._id,
-                user: memberId,
-                team: team._id,
-                ticketId: uuidv4(),
-                status: "registered",
-                paymentStatus: "completed",
-                quantity: 1,
-                teamName: team.name,
-                responses: responsesMap[memberId.toString()] || {}
-            }));
+            const registrationDocs = [];
+            for (const memberId of team.members) {
+                const existingReg = await Registration.findOne({ event: event._id, user: memberId });
+                const memberResponses = responsesMap[memberId.toString()] || {};
 
-            await Registration.insertMany(registrationDocs);
+                if (existingReg && existingReg.status === "cancelled") {
+                    existingReg.ticketId = uuidv4();
+                    existingReg.status = "registered";
+                    existingReg.team = team._id;
+                    existingReg.teamName = team.name;
+                    existingReg.responses = memberResponses;
+                    await existingReg.save();
+                    registrationDocs.push(existingReg);
+                } else {
+                    const newReg = await Registration.create({
+                        event: event._id,
+                        user: memberId,
+                        team: team._id,
+                        ticketId: uuidv4(),
+                        status: "registered",
+                        paymentStatus: "completed",
+                        quantity: 1,
+                        teamName: team.name,
+                        responses: memberResponses
+                    });
+                    registrationDocs.push(newReg);
+                }
+            }
             team.status = "completed";
 
             // Send confirmation email to every member

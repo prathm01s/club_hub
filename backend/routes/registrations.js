@@ -90,9 +90,9 @@ router.post("/:eventID", auth, async (req, res) => {
             });
         }
 
-        // Check if user has already registered
-        const existingReg = await Registration.findOne({ event: eventId, user: userId });
-        if (existingReg) {
+        // Check if user has an active registration
+        let existingReg = await Registration.findOne({ event: eventId, user: userId });
+        if (existingReg && existingReg.status !== 'cancelled') {
             return res.status(400).json({ msg: "You are already registered for this event" });
         }
         /*
@@ -128,17 +128,27 @@ router.post("/:eventID", auth, async (req, res) => {
             }
         }
 
-        // Create new registration
-        const newRegistration = new Registration({
-            event: eventId,
-            user: userId,
-            ticketId: uuidv4(),
-            status: "registered",
-            responses: userResponses,
-            quantity: quantity
-        });
-
-        await newRegistration.save();
+        // Create new registration OR recycle cancelled one
+        let newRegistration;
+        if (existingReg && existingReg.status === 'cancelled') {
+            existingReg.ticketId = uuidv4();
+            existingReg.status = "registered";
+            existingReg.responses = userResponses;
+            existingReg.quantity = quantity;
+            existingReg.teamName = '';
+            await existingReg.save();
+            newRegistration = existingReg;
+        } else {
+            newRegistration = new Registration({
+                event: eventId,
+                user: userId,
+                ticketId: uuidv4(),
+                status: "registered",
+                responses: userResponses,
+                quantity: quantity
+            });
+            await newRegistration.save();
+        }
         /*
         await Event.findByIdAndUpdate(eventId, { 
             $inc: { registrationCount: 1 } 
